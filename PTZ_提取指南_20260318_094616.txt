@@ -1,0 +1,79 @@
+
+🔍 PTZ网络请求信息提取指南
+==========================================
+
+📋 在浏览器开发者工具(F12)中，请按以下步骤操作：
+
+## 步骤1: 准备工作
+1. 确保在 Network 标签页
+2. 勾选 "Preserve log" (保留日志)
+3. 清空当前请求列表
+4. 准备操作PTZ控制
+
+## 步骤2: 捕获PTZ请求
+1. 在摄像头Web界面中操作PTZ控制 (点击方向按钮)
+2. 观察Network标签页中出现的新请求
+3. 寻找与PTZ相关的请求 (通常包含关键词如: ptz, move, control, motor等)
+
+## 步骤3: 提取请求信息
+对于每个PTZ相关请求，请提供以下信息：
+
+### 基本信息:
+- 请求URL (完整地址)
+- 请求方法 (GET/POST/PUT等)
+- 状态码 (200/404等)
+
+### 请求详情:
+- Request Headers (请求头)
+- Request Payload/Form Data (如果有)
+- Query Parameters (URL参数)
+
+### 响应信息:
+- Response Headers (响应头)
+- Response Body (响应内容)
+
+## 📝 信息收集模板
+请将发现的信息按以下格式提供：
+
+```
+=== PTZ请求 #1 ===
+操作: 向左移动
+URL: https://192.168.31.146/xxxxx
+方法: GET/POST
+状态码: 200
+
+请求参数:
+- 参数1: 值1
+- 参数2: 值2
+
+请求头:
+Content-Type: application/json
+...
+
+请求体 (如果是POST):
+{"action": "move", "direction": "left"}
+
+响应头:
+Content-Type: text/html
+...
+
+响应内容:
+{"status": "ok", "result": "success"}
+
+=== PTZ请求 #2 ===
+操作: 向右移动
+...
+```
+
+## 🎯 重点关注的请求特征
+寻找以下特征的请求:
+- URL包含: ptz, motor, move, control, cgi-bin
+- 请求发生在点击PTZ控制按钮时
+- 状态码为200的成功请求
+- 响应内容不是404错误页面
+
+## 💡 提示
+- 可以右键点击请求选择 "Copy as cURL" 获取完整命令
+- 可以在 Headers 标签查看详细信息
+- 可以在 Payload 标签查看POST数据
+- 可以在 Response 标签查看返回内容
