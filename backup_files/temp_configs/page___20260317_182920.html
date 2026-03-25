@@ -1,0 +1,29 @@
+<!doctype html>
+<html>
+<head>
+	<meta name="renderer" content="webkit">
+	<meta http-equiv="X-UA-Compatible" content="IE=10"/>
+	<meta charset="utf-8"/>
+	<META HTTP-EQUIV="pragma" CONTENT="no-cache" /> 
+	<META HTTP-EQUIV="Cache-Control" CONTENT="no-cache, no-store" /> 
+	<META HTTP-EQUIV="expires" CONTENT="0" />
+</head>
+<body >
+<script>
+(function(){
+	function GetQueryString(name) {
+		var reg = new RegExp("(^|&)"+ name +"=([^&]*)(&|$)");
+		var l = decodeURI(window.location.search); 
+		var r = l.substr(1).match(reg);
+		if(r!=null)
+			return  unescape(r[2]); 
+		return null;
+	}
+  if(location.protocol === 'http:') {
+		var httpsPort = GetQueryString('https_port') || '443'
+		location.href = 'https://' + location.hostname + ':' + httpsPort + location.pathname + location.search
+  }
+})()
+</script>
+</body>
+</html>

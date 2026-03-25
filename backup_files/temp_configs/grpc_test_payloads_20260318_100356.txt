@@ -1,0 +1,12 @@
+# gRPC PTZ测试Payload集合
+
+## JSON 格式:
+   {"command": "ptz", "action": "move", "direction": "left", "speed": 5}
+   {"cmd": "move_left", "speed": 3, "channel": 0}
+   {"ptz": {"move": "left", "velocity": 50}}
+
+## Binary_Hex 格式:
+   080112061a020801
+   0a0408011206
+   12345678
+

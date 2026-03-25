@@ -1,0 +1,24 @@
+[18:29:20] 🚀 开始PTZ协议分析...
+[18:29:20] 🔍 测试连接协议...
+[18:29:20]    ✅ HTTP 连接成功 (状态: 200)
+[18:29:20] 🌐 分析页面: /
+[18:29:20]    📍 发现PTZ相关内容: [' CONTENT=']
+[18:29:20]    💾 页面已保存: page___20260317_182920.html
+[18:29:20] 🌐 分析页面: /index.html
+[18:29:20]    📍 发现PTZ相关内容: [' CONTENT=']
+[18:29:20]    💾 页面已保存: page__index.html_20260317_182920.html
+[18:29:20] 🌐 分析页面: /setting.html
+[18:29:21] 🌐 分析页面: /main.html
+[18:29:21] 🌐 分析页面: /control.html
+[18:29:21] 🎮 开始手动PTZ测试...
+[18:29:21]    测试: /cgi-bin/ptz.cgi?action=start&channel=0&code=Left&arg1=0&arg2=5 -> 404
+[18:29:21]    测试: /cgi-bin/ptz.cgi?action=start&channel=0&code=Right&arg1=0&arg2=5 -> 404
+[18:29:22]    测试: /cgi-bin/ptz.cgi?action=start&channel=0&code=Up&arg1=0&arg2=5 -> 404
+[18:29:22]    测试: /cgi-bin/ptz.cgi?action=start&channel=0&code=Down&arg1=0&arg2=5 -> 404
+[18:29:23]    测试: /api/ptz?cmd=left&speed=3 -> 404
+[18:29:23]    测试: /api/ptz?cmd=right&speed=3 -> 404
+[18:29:24]    测试: /control?move=left&speed=50 -> 404
+[18:29:24]    测试: /control?move=right&speed=50 -> 404
+[18:29:25] 📋 生成测试命令...
+[18:29:25] 💾 测试命令已保存: ptz_test_commands_20260317_182920.sh
+[18:29:25] ✅ 分析完成!
