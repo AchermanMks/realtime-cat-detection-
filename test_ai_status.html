@@ -1,0 +1,105 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>AI分析状态测试</title>
+    <meta charset="UTF-8">
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; background: #f0f0f0; }
+        .status { background: white; padding: 20px; border-radius: 8px; margin: 10px 0; }
+        .success { background: #d4edda; border: 1px solid #c3e6cb; }
+        .analysis-text { background: #e3f2fd; padding: 15px; border-radius: 5px; margin: 10px 0; }
+        .meta { color: #666; font-size: 12px; margin-top: 10px; }
+        button { background: #007bff; color: white; padding: 10px 20px; border: none; border-radius: 5px; cursor: pointer; }
+        button:hover { background: #0056b3; }
+    </style>
+</head>
+<body>
+    <h1>🤖 AI分析状态诊断</h1>
+
+    <div class="status">
+        <h3>系统概况</h3>
+        <p>📹 FPS: <span id="fps">-</span></p>
+        <p>📊 总帧数: <span id="frames">-</span></p>
+        <p>🔬 AI分析次数: <span id="analyses">-</span></p>
+        <p>⏱️ 运行时间: <span id="uptime">-</span></p>
+        <p>🔗 摄像头连接: <span id="camera">-</span></p>
+    </div>
+
+    <div class="status success">
+        <h3>🧠 最新AI分析结果</h3>
+        <div class="analysis-text" id="analysis-content">加载中...</div>
+        <div class="meta" id="analysis-meta"></div>
+    </div>
+
+    <button onclick="updateNow()">🔄 立即刷新</button>
+    <button onclick="location.href='http://localhost:5005'">🖥️ 打开主界面</button>
+
+    <div class="status">
+        <h3>📝 诊断日志</h3>
+        <pre id="log"></pre>
+    </div>
+
+    <script>
+        function log(msg) {
+            const timestamp = new Date().toLocaleTimeString();
+            document.getElementById('log').textContent += `[${timestamp}] ${msg}\n`;
+        }
+
+        function updateStatus() {
+            log('正在获取系统状态...');
+
+            fetch('http://localhost:5005/api/status')
+                .then(response => {
+                    if (!response.ok) {
+                        throw new Error(`HTTP ${response.status}`);
+                    }
+                    return response.json();
+                })
+                .then(data => {
+                    // 更新基本状态
+                    document.getElementById('fps').textContent = data.fps.toFixed(1);
+                    document.getElementById('frames').textContent = data.total_frames.toLocaleString();
+                    document.getElementById('analyses').textContent = data.total_analyses;
+                    document.getElementById('camera').textContent = data.camera_connected ? '✅ 已连接' : '❌ 断开';
+
+                    // 计算运行时间
+                    const uptime = Math.floor(data.uptime);
+                    const hours = Math.floor(uptime / 3600);
+                    const minutes = Math.floor((uptime % 3600) / 60);
+                    const seconds = uptime % 60;
+                    document.getElementById('uptime').textContent = `${hours}h${minutes}m${seconds}s`;
+
+                    // 更新AI分析结果
+                    if (data.latest_analysis && data.latest_analysis.text) {
+                        document.getElementById('analysis-content').textContent = data.latest_analysis.text;
+
+                        const analysisTime = new Date(data.latest_analysis.timestamp * 1000);
+                        const duration = data.latest_analysis.analysis_time;
+                        document.getElementById('analysis-meta').textContent =
+                            `分析耗时: ${duration.toFixed(1)}秒 | 完成时间: ${analysisTime.toLocaleString()}`;
+
+                        log(`✅ AI分析正常 - ${data.total_analyses}次分析已完成`);
+                    } else {
+                        document.getElementById('analysis-content').textContent = '暂无分析结果';
+                        log('⚠️ 没有AI分析结果');
+                    }
+                })
+                .catch(error => {
+                    log(`❌ 状态获取失败: ${error.message}`);
+                    document.getElementById('analysis-content').textContent = `错误: ${error.message}`;
+                });
+        }
+
+        function updateNow() {
+            document.getElementById('log').textContent = '';
+            updateStatus();
+        }
+
+        // 页面加载后立即更新，然后每5秒更新一次
+        updateStatus();
+        setInterval(updateStatus, 5000);
+
+        log('🚀 AI分析状态监控器已启动');
+    </script>
+</body>
+</html>

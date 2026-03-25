@@ -1,0 +1,102 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# PyTorch
+*.pth
+*.pt
+
+# Virtual Environment
+venv/
+env/
+ENV/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# System Files
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+logs/
+
+# Database
+*.db
+*.sqlite
+*.sqlite3
+
+# Media Files
+*.jpg
+*.jpeg
+*.png
+*.gif
+*.mp4
+*.avi
+*.mov
+*.mkv
+
+# Config Files (sensitive)
+config.json
+secrets.json
+credentials.json
+*.env
+
+# Temporary Files
+tmp/
+temp/
+.tmp/
+*.tmp
+*.temp
+
+# Session Files
+session_*.json
+auto_session_config.json
+
+# Test Files
+test_frame_*.jpg
+test_*.mp4
+test_output/
+
+# Documentation Generation
+docs/_build/
+
+# Coverage Reports
+htmlcov/
+.coverage
+.pytest_cache/
+
+# Jupyter Notebooks
+.ipynb_checkpoints
+
+# Claude/AI Tools
+.claude/
+.history/
+
+# SSH Keys
+*.pem
+*.key
+id_rsa*

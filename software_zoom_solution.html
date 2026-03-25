@@ -1,0 +1,149 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>软件缩放解决方案</title>
+    <meta charset="UTF-8">
+    <style>
+        body { font-family: Arial, sans-serif; margin: 0; padding: 20px; background: #000; }
+        .container { max-width: 1200px; margin: 0 auto; }
+        .video-container { position: relative; background: #222; border-radius: 10px; overflow: hidden; }
+        #videoFrame {
+            width: 100%;
+            height: auto;
+            transform-origin: center center;
+            transition: transform 0.3s ease;
+        }
+        .controls {
+            background: rgba(255,255,255,0.1);
+            padding: 15px;
+            border-radius: 10px;
+            margin: 20px 0;
+            text-align: center;
+        }
+        .btn {
+            background: #007bff;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            margin: 5px;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 16px;
+        }
+        .btn:hover { background: #0056b3; }
+        .btn-reset { background: #28a745; }
+        .btn-reset:hover { background: #1e7e34; }
+        .zoom-info {
+            color: white;
+            margin: 10px 0;
+            font-size: 18px;
+        }
+        h1 { color: white; text-align: center; }
+        .explanation {
+            background: rgba(255,255,255,0.1);
+            color: white;
+            padding: 20px;
+            border-radius: 10px;
+            margin: 20px 0;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🔍 软件缩放解决方案</h1>
+
+        <div class="explanation">
+            <h3>💡 为什么硬件缩小不工作？</h3>
+            <p><strong>根本原因</strong>：小米摄像头使用固定焦距镜头 + 数字缩放</p>
+            <ul>
+                <li>✅ <strong>放大</strong>：裁剪画面中心区域（数字放大）</li>
+                <li>❌ <strong>缩小</strong>：无法超越传感器物理分辨率</li>
+                <li>🔧 <strong>解决方案</strong>：用软件CSS缩放替代硬件缩放</li>
+            </ul>
+        </div>
+
+        <div class="controls">
+            <div class="zoom-info">当前缩放比例: <span id="zoomLevel">100%</span></div>
+            <button class="btn" onclick="softwareZoom(1.2)">🔍 软件放大</button>
+            <button class="btn" onclick="softwareZoom(0.8)">🔍 软件缩小</button>
+            <button class="btn btn-reset" onclick="resetZoom()">🎯 恢复100%</button>
+            <br>
+            <button class="btn" onclick="hardwareZoomIn()">📷 硬件放大</button>
+            <button class="btn" onclick="hardwareZoomOut()">📷 硬件缩小(无效)</button>
+        </div>
+
+        <div class="video-container">
+            <img id="videoFrame" src="http://localhost:5005/video_feed" alt="摄像头视频流">
+        </div>
+
+        <div class="explanation">
+            <h3>🎮 使用说明</h3>
+            <ul>
+                <li><strong>软件缩放</strong>：可以自由放大/缩小，突破硬件限制</li>
+                <li><strong>硬件放大</strong>：真实的摄像头数字缩放</li>
+                <li><strong>硬件缩小</strong>：演示为什么不工作</li>
+                <li><strong>恢复100%</strong>：回到原始大小</li>
+            </ul>
+        </div>
+    </div>
+
+    <script>
+        let currentScale = 1.0;
+
+        function updateZoomDisplay() {
+            document.getElementById('zoomLevel').textContent = (currentScale * 100).toFixed(0) + '%';
+            document.getElementById('videoFrame').style.transform = `scale(${currentScale})`;
+        }
+
+        function softwareZoom(factor) {
+            currentScale *= factor;
+            // 限制缩放范围
+            currentScale = Math.max(0.5, Math.min(3.0, currentScale));
+            updateZoomDisplay();
+        }
+
+        function resetZoom() {
+            currentScale = 1.0;
+            updateZoomDisplay();
+        }
+
+        function hardwareZoomIn() {
+            fetch('http://localhost:5005/api/ptz/zoom_in', {method: 'POST'})
+                .then(response => response.json())
+                .then(data => {
+                    console.log('硬件放大:', data.success ? '成功' : '失败');
+                });
+        }
+
+        function hardwareZoomOut() {
+            fetch('http://localhost:5005/api/ptz/zoom_out', {method: 'POST'})
+                .then(response => response.json())
+                .then(data => {
+                    console.log('硬件缩小:', data.success ? 'API成功但无效果' : '失败');
+                });
+        }
+
+        // 键盘控制
+        document.addEventListener('keydown', function(e) {
+            switch(e.key) {
+                case '+':
+                case '=':
+                    softwareZoom(1.1);
+                    break;
+                case '-':
+                    softwareZoom(0.9);
+                    break;
+                case '0':
+                    resetZoom();
+                    break;
+            }
+        });
+
+        // 初始化
+        updateZoomDisplay();
+
+        console.log('💡 软件缩放解决方案已加载');
+        console.log('⌨️ 键盘控制: +放大, -缩小, 0重置');
+    </script>
+</body>
+</html>

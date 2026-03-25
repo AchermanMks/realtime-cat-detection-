@@ -18,37 +18,55 @@ from qwen_vl_utils import process_vision_info
 import signal
 import sys
 import urllib.request
+from smart_ptz_controller import SmartPTZController
 
 app = Flask(__name__)
 
-class PTZController:
-    """PTZ控制器 - 通过Node.js代理控制"""
+class PTZControllerAdapter:
+    """PTZ控制器适配器 - 适配SmartPTZController到原有接口"""
 
-    def __init__(self):
-        self.proxy_url = "http://localhost:8899"
+    def __init__(self, smart_controller):
+        self.smart_controller = smart_controller
         self.last_command_time = 0
         self.command_cooldown = 0.1  # 100ms冷却时间
 
     def send_command(self, action):
-        """发送PTZ命令"""
-        current_time = time.time()
-        if current_time - self.last_command_time < self.command_cooldown:
+        """发送PTZ命令 - 适配原有接口"""
+        if not self.smart_controller:
+            print("⚠️ PTZ控制器未初始化")
             return False
 
-        try:
-            url = f"{self.proxy_url}/ptz/{action}"
-            req = urllib.request.Request(url)
-            with urllib.request.urlopen(req, timeout=3) as response:
-                result = response.read().decode() == 'success'
+        current_time = time.time()
+        if current_time - self.last_command_time < self.command_cooldown:
+            print(f"PTZ命令 {action}: 冷却中，跳过")
+            return True
+
+        # 映射命令到SmartPTZController的方法
+        command_map = {
+            'up': lambda: self.smart_controller.move_for_duration('up', 120, 0.3),
+            'down': lambda: self.smart_controller.move_for_duration('down', 120, 0.3),
+            'left': lambda: self.smart_controller.move_for_duration('left', 120, 0.3),
+            'right': lambda: self.smart_controller.move_for_duration('right', 120, 0.3),
+            'stop': lambda: self.smart_controller.stop_move(),
+            'zoom_in': lambda: self.smart_controller.zoom_in(),
+            'zoom_out': lambda: self.smart_controller.zoom_out(),
+        }
+
+        if action in command_map:
+            try:
+                result = command_map[action]()
                 self.last_command_time = current_time
                 print(f"PTZ命令 {action}: {'成功' if result else '失败'}")
-                return result
-        except Exception as e:
-            print(f"PTZ命令失败: {e}")
+                return bool(result)
+            except Exception as e:
+                print(f"PTZ命令失败: {e}")
+                return False
+        else:
+            print(f"❌ 不支持的PTZ命令: {action}")
             return False
 
 class WebCameraVLM:
-    def __init__(self, camera_url=None):
+    def __init__(self, camera_url=None, camera_ip=None, camera_username="admin", camera_password="admin123"):
         # 支持RTSP URL或本地摄像头索引
         self.camera_url = camera_url if camera_url is not None else 0
         self.is_rtsp = isinstance(self.camera_url, str) and self.camera_url.startswith('rtsp://')
@@ -83,8 +101,13 @@ class WebCameraVLM:
             'camera_connected': False
         }
 
-        # PTZ控制器
-        self.ptz_controller = PTZController()
+        # PTZ控制器 - 使用智能直接控制
+        if camera_ip:
+            smart_controller = SmartPTZController(camera_ip, camera_username, camera_password)
+            self.ptz_controller = PTZControllerAdapter(smart_controller)
+        else:
+            print("⚠️ 未提供摄像头IP，PTZ控制功能将不可用")
+            self.ptz_controller = PTZControllerAdapter(None)
 
     def load_vlm_model(self):
         """加载VLM模型"""
@@ -678,6 +701,9 @@ def main():
     parser = argparse.ArgumentParser(description='整合版智能摄像头监控系统')
     parser.add_argument('--rtsp', help='RTSP摄像头URL')
     parser.add_argument('--camera', type=int, default=0, help='本地摄像头索引')
+    parser.add_argument('--camera-ip', help='摄像头IP地址 (用于PTZ控制)')
+    parser.add_argument('--camera-user', default='admin', help='摄像头用户名')
+    parser.add_argument('--camera-pass', default='admin123', help='摄像头密码')
     parser.add_argument('--port', type=int, default=5000, help='Web服务器端口')
     parser.add_argument('--host', default='0.0.0.0', help='Web服务器主机')
 
@@ -685,7 +711,12 @@ def main():
 
     # 初始化摄像头系统
     camera_url = args.rtsp if args.rtsp else args.camera
-    camera_system = WebCameraVLM(camera_url)
+    camera_system = WebCameraVLM(
+        camera_url=camera_url,
+        camera_ip=args.camera_ip,
+        camera_username=args.camera_user,
+        camera_password=args.camera_pass
+    )
 
     print("🌐 整合版摄像头系统启动中...")
     print(f"📡 使用摄像头: {camera_url}")

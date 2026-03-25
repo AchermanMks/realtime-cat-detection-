@@ -34,7 +34,7 @@ function sendPTZCommand(method, params) {
             'Accept': 'application/json, text/javascript, */*; q=0.01',
             'Content-Type': 'application/json; charset=UTF-8',
             'Content-Length': postData.length,
-            'SessionId': '921B4E790DBB846BF5F300428A4BF66',
+            'SessionId': 'C9F3FFE3B11C2B2CAC942516B3BB0F2',
             'User-Agent': 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36',
             'Origin': 'https://192.168.31.146'
         }
