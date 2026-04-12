@@ -1,0 +1,23 @@
+{
+  "timestamp": "2026-04-10T12:24:21.053004",
+  "usd_file": "scan.usd",
+  "room_bounds": {
+    "x_min": -2.4981448650360107,
+    "x_max": 2.529348134994507,
+    "y_min": -2.504166603088379,
+    "y_max": 2.504166603088379,
+    "z_min": -0.638279139995575,
+    "z_max": 0.638279139995575
+  },
+  "room_objects": {
+    "walls_count": 8,
+    "floor_exists": true,
+    "furniture_count": 9,
+    "other_objects_count": 2
+  },
+  "floor_plan_shape": [
+    100,
+    100
+  ],
+  "processing_method": "USD_library"
+}

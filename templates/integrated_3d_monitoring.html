@@ -1,0 +1,564 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>完整3D监控系统</title>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <style>
+        :root {
+            --apple-blue: #007AFF;
+            --apple-green: #34C759;
+            --apple-red: #FF3B30;
+            --apple-orange: #FF9500;
+            --apple-purple: #5856D6;
+            --apple-pink: #FF2D92;
+            --apple-teal: #5AC8FA;
+            --apple-gray: #8E8E93;
+            --apple-light-gray: #F2F2F7;
+            --apple-separator: rgba(60, 60, 67, 0.36);
+            --apple-background: rgba(255, 255, 255, 0.95);
+            --spring-timing: cubic-bezier(0.175, 0.885, 0.32, 1.275);
+            --smooth-timing: cubic-bezier(0.25, 0.46, 0.45, 0.94);
+            --apple-shadow: 0 8px 30px rgba(0, 0, 0, 0.12);
+            --apple-shadow-hover: 0 12px 40px rgba(0, 0, 0, 0.2);
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'SF Pro Display', 'SF Pro Icons', 'AOS Icons', 'Helvetica Neue', Helvetica, Arial, sans-serif;
+            background: linear-gradient(135deg, #000000 0%, #0a0a0a 50%, #000000 100%);
+            color: #ffffff;
+            min-height: 100vh;
+            padding: 20px;
+            line-height: 1.47059;
+            font-weight: 400;
+            overflow-x: hidden;
+        }
+
+        .header {
+            text-align: center;
+            margin-bottom: 30px;
+            padding: 20px 0;
+        }
+
+        .header h1 {
+            font-size: 42px;
+            font-weight: 800;
+            background: linear-gradient(135deg, var(--apple-blue), var(--apple-purple), var(--apple-pink));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            margin-bottom: 12px;
+            letter-spacing: -0.022em;
+        }
+
+        .header p {
+            font-size: 18px;
+            color: rgba(255, 255, 255, 0.7);
+            font-weight: 500;
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            grid-template-rows: auto auto auto;
+            gap: 20px;
+            height: calc(100vh - 160px);
+        }
+
+        .video-panel {
+            grid-column: 1;
+            grid-row: 1 / 3;
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 20px;
+            padding: 20px;
+            backdrop-filter: blur(20px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            overflow: hidden;
+        }
+
+        .video-panel h2 {
+            font-size: 24px;
+            font-weight: 700;
+            margin-bottom: 15px;
+            color: var(--apple-blue);
+        }
+
+        .video-container {
+            position: relative;
+            width: 100%;
+            height: calc(100% - 50px);
+            background: #000;
+            border-radius: 12px;
+            overflow: hidden;
+            box-shadow: var(--apple-shadow);
+        }
+
+        .video-stream {
+            width: 100%;
+            height: 100%;
+            object-fit: contain;
+            border-radius: 12px;
+        }
+
+        .detection-panel {
+            grid-column: 2;
+            grid-row: 1;
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 20px;
+            padding: 20px;
+            backdrop-filter: blur(20px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            overflow-y: auto;
+        }
+
+        .detection-panel h2 {
+            font-size: 24px;
+            font-weight: 700;
+            margin-bottom: 15px;
+            color: var(--apple-green);
+        }
+
+        .detection-item {
+            background: rgba(255, 255, 255, 0.08);
+            border-radius: 12px;
+            padding: 15px;
+            margin-bottom: 10px;
+            border-left: 4px solid var(--apple-green);
+            transition: transform 0.2s var(--smooth-timing);
+        }
+
+        .detection-item:hover {
+            transform: translateX(5px);
+        }
+
+        .detection-item.dog {
+            border-left-color: var(--apple-blue);
+        }
+
+        .detection-item .pet-info {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 8px;
+        }
+
+        .detection-item .pet-name {
+            font-size: 16px;
+            font-weight: 600;
+            text-transform: capitalize;
+        }
+
+        .detection-item .confidence {
+            font-size: 14px;
+            color: rgba(255, 255, 255, 0.7);
+        }
+
+        .detection-item .position {
+            font-size: 14px;
+            color: var(--apple-teal);
+            margin-top: 5px;
+        }
+
+        .visualization-panel {
+            grid-column: 2;
+            grid-row: 2;
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 20px;
+            padding: 20px;
+            backdrop-filter: blur(20px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .visualization-panel h2 {
+            font-size: 24px;
+            font-weight: 700;
+            margin-bottom: 15px;
+            color: var(--apple-purple);
+        }
+
+        .visualization-container {
+            width: 100%;
+            height: calc(100% - 50px);
+            background: rgba(255, 255, 255, 0.02);
+            border-radius: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .visualization-image {
+            max-width: 100%;
+            max-height: 100%;
+            object-fit: contain;
+            border-radius: 8px;
+        }
+
+        .analysis-panel {
+            grid-column: 1 / -1;
+            grid-row: 3;
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 20px;
+            padding: 20px;
+            backdrop-filter: blur(20px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            display: grid;
+            grid-template-columns: 2fr 1fr;
+            gap: 20px;
+        }
+
+        .vlm-analysis {
+            background: rgba(255, 255, 255, 0.03);
+            border-radius: 12px;
+            padding: 20px;
+        }
+
+        .vlm-analysis h3 {
+            font-size: 20px;
+            font-weight: 600;
+            margin-bottom: 12px;
+            color: var(--apple-orange);
+        }
+
+        .analysis-text {
+            font-size: 15px;
+            line-height: 1.6;
+            color: rgba(255, 255, 255, 0.9);
+            padding: 15px;
+            background: rgba(0, 0, 0, 0.3);
+            border-radius: 8px;
+            border-left: 3px solid var(--apple-orange);
+        }
+
+        .system-status {
+            background: rgba(255, 255, 255, 0.03);
+            border-radius: 12px;
+            padding: 20px;
+        }
+
+        .system-status h3 {
+            font-size: 20px;
+            font-weight: 600;
+            margin-bottom: 12px;
+            color: var(--apple-teal);
+        }
+
+        .status-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 8px;
+            padding: 8px 0;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .status-item:last-child {
+            border-bottom: none;
+        }
+
+        .status-label {
+            font-size: 14px;
+            color: rgba(255, 255, 255, 0.7);
+        }
+
+        .status-value {
+            font-size: 14px;
+            font-weight: 600;
+            color: var(--apple-green);
+        }
+
+        .status-value.error {
+            color: var(--apple-red);
+        }
+
+        .loading {
+            display: inline-block;
+            width: 20px;
+            height: 20px;
+            border: 2px solid rgba(255, 255, 255, 0.3);
+            border-radius: 50%;
+            border-top-color: var(--apple-blue);
+            animation: spin 1s ease-in-out infinite;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        .no-data {
+            text-align: center;
+            color: rgba(255, 255, 255, 0.5);
+            font-style: italic;
+            padding: 40px 20px;
+        }
+
+        .refresh-button {
+            position: fixed;
+            bottom: 30px;
+            right: 30px;
+            width: 60px;
+            height: 60px;
+            background: var(--apple-blue);
+            border: none;
+            border-radius: 50%;
+            color: white;
+            font-size: 24px;
+            cursor: pointer;
+            box-shadow: var(--apple-shadow);
+            transition: transform 0.3s var(--spring-timing), box-shadow 0.3s var(--smooth-timing);
+        }
+
+        .refresh-button:hover {
+            transform: scale(1.1);
+            box-shadow: var(--apple-shadow-hover);
+        }
+
+        .refresh-button:active {
+            transform: scale(0.95);
+        }
+
+        @media (max-width: 1200px) {
+            .container {
+                grid-template-columns: 1fr;
+                grid-template-rows: auto auto auto auto;
+            }
+
+            .video-panel {
+                grid-column: 1;
+                grid-row: 1;
+            }
+
+            .detection-panel {
+                grid-column: 1;
+                grid-row: 2;
+            }
+
+            .visualization-panel {
+                grid-column: 1;
+                grid-row: 3;
+            }
+
+            .analysis-panel {
+                grid-column: 1;
+                grid-row: 4;
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>🐾 完整3D监控系统</h1>
+        <p>Real-time Pet Detection + 3D Localization + VLM Analysis</p>
+    </div>
+
+    <div class="container">
+        <!-- 实时视频流 -->
+        <div class="video-panel">
+            <h2>📹 实时监控</h2>
+            <div class="video-container">
+                <img class="video-stream" src="{{ url_for('video_feed') }}" alt="Live Video Feed" />
+            </div>
+        </div>
+
+        <!-- 检测结果 -->
+        <div class="detection-panel">
+            <h2>🎯 当前检测</h2>
+            <div id="detections-container">
+                <div class="no-data">正在等待检测结果...</div>
+            </div>
+        </div>
+
+        <!-- 3D可视化 -->
+        <div class="visualization-panel">
+            <h2>🏠 3D空间定位</h2>
+            <div class="visualization-container">
+                <div id="3d-visualization">
+                    <div class="no-data">正在生成3D可视化...</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- VLM分析与系统状态 -->
+        <div class="analysis-panel">
+            <div class="vlm-analysis">
+                <h3>🤖 VLM智能分析</h3>
+                <div class="analysis-text" id="vlm-analysis-text">
+                    等待VLM分析结果...
+                </div>
+            </div>
+
+            <div class="system-status">
+                <h3>⚡ 系统状态</h3>
+                <div id="status-container">
+                    <div class="status-item">
+                        <span class="status-label">系统运行</span>
+                        <span class="status-value"><div class="loading"></div></span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <button class="refresh-button" onclick="location.reload()" title="刷新页面">
+        🔄
+    </button>
+
+    <script>
+        // 状态更新函数
+        function updateSystemStatus() {
+            fetch('/api/status')
+                .then(response => response.json())
+                .then(data => {
+                    if (data.error) {
+                        console.error('Status error:', data.error);
+                        return;
+                    }
+
+                    const statusContainer = document.getElementById('status-container');
+                    statusContainer.innerHTML = `
+                        <div class="status-item">
+                            <span class="status-label">系统状态</span>
+                            <span class="status-value ${data.running ? '' : 'error'}">${data.running ? '运行中' : '已停止'}</span>
+                        </div>
+                        <div class="status-item">
+                            <span class="status-label">当前检测</span>
+                            <span class="status-value">${data.current_detections} 个</span>
+                        </div>
+                        <div class="status-item">
+                            <span class="status-label">总检测数</span>
+                            <span class="status-value">${data.total_detections}</span>
+                        </div>
+                        <div class="status-item">
+                            <span class="status-label">3D定位</span>
+                            <span class="status-value">${data['3d_localizations']}</span>
+                        </div>
+                        <div class="status-item">
+                            <span class="status-label">VLM分析</span>
+                            <span class="status-value">${data.vlm_analyses}</span>
+                        </div>
+                        <div class="status-item">
+                            <span class="status-label">运行时长</span>
+                            <span class="status-value">${Math.floor(data.uptime_seconds)}秒</span>
+                        </div>
+                        <div class="status-item">
+                            <span class="status-label">YOLO模型</span>
+                            <span class="status-value ${data.components.yolo_loaded ? '' : 'error'}">${data.components.yolo_loaded ? '已加载' : '未加载'}</span>
+                        </div>
+                        <div class="status-item">
+                            <span class="status-label">VLM模型</span>
+                            <span class="status-value ${data.components.vlm_loaded ? '' : 'error'}">${data.components.vlm_loaded ? '已加载' : '未加载'}</span>
+                        </div>
+                        <div class="status-item">
+                            <span class="status-label">3D模型</span>
+                            <span class="status-value ${data.components['3d_model_loaded'] ? '' : 'error'}">${data.components['3d_model_loaded'] ? '已加载' : '未加载'}</span>
+                        </div>
+                        <div class="status-item">
+                            <span class="status-label">摄像头</span>
+                            <span class="status-value ${data.components.camera_connected ? '' : 'error'}">${data.components.camera_connected ? '已连接' : '未连接'}</span>
+                        </div>
+                    `;
+                })
+                .catch(error => console.error('Error fetching status:', error));
+        }
+
+        // 检测结果更新函数
+        function updateDetections() {
+            fetch('/api/detections')
+                .then(response => response.json())
+                .then(data => {
+                    if (data.error) {
+                        console.error('Detections error:', data.error);
+                        return;
+                    }
+
+                    const detectionsContainer = document.getElementById('detections-container');
+
+                    if (!data.current_detections || data.current_detections.length === 0) {
+                        detectionsContainer.innerHTML = '<div class="no-data">暂无检测结果</div>';
+                    } else {
+                        detectionsContainer.innerHTML = data.current_detections.map(detection => `
+                            <div class="detection-item ${detection.class_name}">
+                                <div class="pet-info">
+                                    <span class="pet-name">${detection.class_name === 'cat' ? '🐱 猫咪' : '🐶 狗狗'}</span>
+                                    <span class="confidence">${(detection.confidence * 100).toFixed(1)}%</span>
+                                </div>
+                                <div class="position">
+                                    像素位置: (${detection.center.x}, ${detection.center.y})
+                                </div>
+                                ${detection['3d_valid'] ? `
+                                <div class="position">
+                                    物理坐标: (${detection['3d_position']['calibrated_coords'].x.toFixed(2)}m, ${detection['3d_position']['calibrated_coords'].y.toFixed(2)}m)
+                                </div>
+                                <div class="position">
+                                    房间位置: ${detection['3d_position']['room_position']}
+                                </div>
+                                ` : ''}
+                            </div>
+                        `).join('');
+                    }
+
+                    // 更新VLM分析
+                    if (data.latest_vlm_analysis) {
+                        const analysisText = document.getElementById('vlm-analysis-text');
+                        const timestamp = new Date(data.latest_vlm_analysis.timestamp * 1000).toLocaleTimeString();
+                        analysisText.innerHTML = `
+                            <div style="margin-bottom: 8px; font-size: 12px; color: rgba(255,255,255,0.5);">
+                                分析时间: ${timestamp}
+                            </div>
+                            ${data.latest_vlm_analysis.text}
+                        `;
+                    }
+                })
+                .catch(error => console.error('Error fetching detections:', error));
+        }
+
+        // 3D可视化更新函数
+        function update3DVisualization() {
+            fetch('/api/3d_visualization')
+                .then(response => response.json())
+                .then(data => {
+                    const visualizationDiv = document.getElementById('3d-visualization');
+
+                    if (data.error) {
+                        visualizationDiv.innerHTML = '<div class="no-data">暂无3D可视化数据</div>';
+                    } else if (data.image) {
+                        visualizationDiv.innerHTML = `<img class="visualization-image" src="data:image/png;base64,${data.image}" alt="3D Visualization" />`;
+                    }
+                })
+                .catch(error => {
+                    console.error('Error fetching 3D visualization:', error);
+                    document.getElementById('3d-visualization').innerHTML = '<div class="no-data">3D可视化加载失败</div>';
+                });
+        }
+
+        // 页面加载完成后开始更新
+        document.addEventListener('DOMContentLoaded', function() {
+            // 立即更新一次
+            updateSystemStatus();
+            updateDetections();
+            update3DVisualization();
+
+            // 设置定时更新
+            setInterval(updateSystemStatus, 5000);  // 每5秒更新系统状态
+            setInterval(updateDetections, 2000);    // 每2秒更新检测结果
+            setInterval(update3DVisualization, 10000); // 每10秒更新3D可视化
+        });
+
+        // 错误处理
+        window.onerror = function(msg, url, line, col, error) {
+            console.error('JavaScript Error:', msg, 'at', url, ':', line);
+            return false;
+        };
+    </script>
+</body>
+</html>

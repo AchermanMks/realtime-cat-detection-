@@ -1,0 +1,15 @@
+{
+  "detection_summary": {
+    "total_detections": 15,
+    "cat_detections": 3,
+    "dog_detections": 12,
+    "frames_with_pets": 14,
+    "processed_frames": 373,
+    "detection_rate": 3.753351206434316
+  },
+  "quality_metrics": {
+    "average_confidence": 0.469,
+    "min_confidence": 0.315,
+    "max_confidence": 0.574
+  }
+}

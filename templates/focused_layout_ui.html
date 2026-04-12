@@ -1,0 +1,942 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <title>🐱 AI宠物监控系统</title>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap');
+
+        :root {
+            --primary-blue: #00D4FF;
+            --accent-green: #00FF88;
+            --accent-orange: #FF6B35;
+            --accent-purple: #8B5FBF;
+
+            --bg-primary: #0A0A0A;
+            --bg-secondary: #151515;
+            --bg-card: rgba(25, 25, 25, 0.95);
+            --bg-secondary-card: rgba(35, 35, 35, 0.9);
+
+            --text-primary: #FFFFFF;
+            --text-secondary: rgba(255, 255, 255, 0.8);
+            --text-muted: rgba(255, 255, 255, 0.5);
+
+            --border-light: rgba(255, 255, 255, 0.1);
+            --border-medium: rgba(255, 255, 255, 0.2);
+
+            --glow-blue: 0 0 20px rgba(0, 212, 255, 0.3);
+            --glow-green: 0 0 15px rgba(0, 255, 136, 0.3);
+            --shadow-main: 0 10px 40px rgba(0, 0, 0, 0.4);
+            --shadow-secondary: 0 5px 20px rgba(0, 0, 0, 0.3);
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+            background:
+                radial-gradient(circle at 25% 25%, rgba(0, 212, 255, 0.08) 0%, transparent 50%),
+                radial-gradient(circle at 75% 75%, rgba(139, 95, 191, 0.08) 0%, transparent 50%),
+                linear-gradient(135deg, var(--bg-primary) 0%, var(--bg-secondary) 100%);
+            color: var(--text-primary);
+            min-height: 100vh;
+            padding: 30px;
+            overflow-x: hidden;
+            background-attachment: fixed;
+        }
+
+        /* Subtle grid pattern */
+        body::before {
+            content: '';
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-image:
+                linear-gradient(rgba(0, 212, 255, 0.02) 1px, transparent 1px),
+                linear-gradient(90deg, rgba(0, 212, 255, 0.02) 1px, transparent 1px);
+            background-size: 40px 40px;
+            animation: subtleMove 30s linear infinite;
+            pointer-events: none;
+            z-index: -1;
+        }
+
+        @keyframes subtleMove {
+            0% { transform: translate(0, 0); }
+            100% { transform: translate(40px, 40px); }
+        }
+
+        /* Header */
+        .header {
+            text-align: center;
+            margin-bottom: 40px;
+            background: var(--bg-card);
+            backdrop-filter: blur(20px);
+            border: 1px solid var(--border-light);
+            border-radius: 16px;
+            padding: 20px 30px;
+            box-shadow: var(--glow-blue);
+            max-width: 800px;
+            margin-left: auto;
+            margin-right: auto;
+            margin-bottom: 40px;
+        }
+
+        .header h1 {
+            font-size: 28px;
+            font-weight: 800;
+            background: linear-gradient(135deg, var(--primary-blue), var(--accent-green));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            margin-bottom: 8px;
+        }
+
+        .header .subtitle {
+            font-size: 14px;
+            color: var(--text-secondary);
+            font-weight: 500;
+        }
+
+        /* Main container - 不铺满但均匀布局 */
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            display: grid;
+            grid-template-columns: 2fr 1fr 1fr;
+            grid-template-rows: 1fr auto;
+            gap: 24px;
+            min-height: calc(100vh - 200px);
+        }
+
+        /* Secondary info bar */
+        .secondary-bar {
+            grid-column: 1 / -1;
+            display: grid;
+            grid-template-columns: 1fr 1fr 1fr 1fr;
+            gap: 16px;
+            height: 120px;
+        }
+
+        /* Main cards */
+        .main-card {
+            background: var(--bg-card);
+            backdrop-filter: blur(20px);
+            border: 1px solid var(--border-medium);
+            border-radius: 20px;
+            padding: 24px;
+            position: relative;
+            transition: all 0.4s ease;
+            overflow: hidden;
+            box-shadow: var(--shadow-main);
+            min-height: 400px;
+        }
+
+        .main-card.video {
+            min-height: auto; /* 视频卡片高度由内容决定 */
+        }
+
+        .main-card::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 3px;
+            border-radius: 20px 20px 0 0;
+        }
+
+        .main-card.video::before {
+            background: linear-gradient(90deg, var(--primary-blue), var(--accent-green));
+        }
+
+        .main-card.analysis::before {
+            background: linear-gradient(90deg, var(--accent-orange), #FF8A50);
+        }
+
+        .main-card.spatial::before {
+            background: linear-gradient(90deg, var(--accent-purple), #A374C4);
+        }
+
+        .main-card:hover {
+            transform: translateY(-3px);
+            border-color: var(--border-light);
+        }
+
+        .main-card.video:hover {
+            box-shadow: var(--shadow-main), var(--glow-blue);
+        }
+
+        .main-card.analysis:hover {
+            box-shadow: var(--shadow-main), 0 0 20px rgba(255, 107, 53, 0.3);
+        }
+
+        .main-card.spatial:hover {
+            box-shadow: var(--shadow-main), 0 0 20px rgba(139, 95, 191, 0.3);
+        }
+
+        .card-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 20px;
+            padding-bottom: 12px;
+            border-bottom: 1px solid var(--border-light);
+        }
+
+        .card-title {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            font-size: 18px;
+            font-weight: 700;
+            color: var(--text-primary);
+        }
+
+        .card-icon {
+            width: 36px;
+            height: 36px;
+            border-radius: 10px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 18px;
+        }
+
+        .card-icon.video {
+            background: linear-gradient(135deg, var(--primary-blue), var(--accent-green));
+            box-shadow: var(--glow-blue);
+        }
+
+        .card-icon.analysis {
+            background: linear-gradient(135deg, var(--accent-orange), #FF8A50);
+            box-shadow: 0 0 15px rgba(255, 107, 53, 0.3);
+        }
+
+        .card-icon.spatial {
+            background: linear-gradient(135deg, var(--accent-purple), #A374C4);
+            box-shadow: 0 0 15px rgba(139, 95, 191, 0.3);
+        }
+
+        .status-indicator {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: var(--accent-green);
+            box-shadow: var(--glow-green);
+            animation: pulse 2.5s ease-in-out infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; transform: scale(1); }
+            50% { opacity: 0.6; transform: scale(1.3); }
+        }
+
+        /* Video panel */
+        .video-container {
+            width: 100%;
+            height: 0;
+            padding-bottom: 56.25%; /* 16:9 横屏比例 */
+            background: #000;
+            border-radius: 12px;
+            overflow: hidden;
+            position: relative;
+            border: 2px solid rgba(0, 212, 255, 0.2);
+        }
+
+        .video-stream {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            object-fit: contain;
+            border-radius: 10px;
+            background: #000;
+        }
+
+        .video-overlay {
+            position: absolute;
+            top: 12px;
+            left: 12px;
+            right: 12px;
+            display: flex;
+            justify-content: space-between;
+            z-index: 10;
+        }
+
+        .video-info {
+            background: rgba(0, 0, 0, 0.8);
+            backdrop-filter: blur(10px);
+            color: var(--accent-green);
+            padding: 6px 12px;
+            border-radius: 6px;
+            font-size: 12px;
+            font-weight: 600;
+            border: 1px solid var(--border-light);
+            box-shadow: var(--glow-green);
+        }
+
+        /* Analysis panel */
+        .analysis-container {
+            width: 100%;
+            height: calc(100% - 80px);
+            background: rgba(20, 20, 20, 0.6);
+            border: 1px solid var(--border-light);
+            border-radius: 12px;
+            padding: 16px;
+            overflow-y: auto;
+            scrollbar-width: thin;
+            scrollbar-color: var(--accent-orange) transparent;
+        }
+
+        .analysis-container::-webkit-scrollbar {
+            width: 4px;
+        }
+
+        .analysis-container::-webkit-scrollbar-track {
+            background: transparent;
+        }
+
+        .analysis-container::-webkit-scrollbar-thumb {
+            background: var(--accent-orange);
+            border-radius: 2px;
+        }
+
+        .analysis-text {
+            font-size: 14px;
+            line-height: 1.6;
+            color: var(--text-secondary);
+            border-left: 3px solid var(--accent-orange);
+            padding-left: 12px;
+        }
+
+        .analysis-timestamp {
+            font-size: 11px;
+            color: var(--text-muted);
+            margin-bottom: 12px;
+        }
+
+        /* Spatial visualization panel */
+        .spatial-container {
+            width: 100%;
+            height: calc(100% - 80px);
+            background: rgba(20, 20, 20, 0.6);
+            border: 1px solid var(--border-light);
+            border-radius: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            overflow: hidden;
+            border: 2px solid rgba(139, 95, 191, 0.2);
+        }
+
+        .spatial-image {
+            max-width: 100%;
+            max-height: 100%;
+            object-fit: contain;
+            border-radius: 8px;
+        }
+
+        /* Secondary cards */
+        .secondary-card {
+            background: var(--bg-secondary-card);
+            backdrop-filter: blur(15px);
+            border: 1px solid var(--border-light);
+            border-radius: 12px;
+            padding: 16px;
+            transition: all 0.3s ease;
+            box-shadow: var(--shadow-secondary);
+        }
+
+        .secondary-card:hover {
+            background: rgba(45, 45, 45, 0.9);
+            border-color: var(--border-medium);
+            transform: translateY(-1px);
+        }
+
+        .secondary-header {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin-bottom: 12px;
+            font-size: 14px;
+            font-weight: 600;
+            color: var(--text-secondary);
+        }
+
+        .secondary-icon {
+            width: 20px;
+            height: 20px;
+            background: var(--primary-blue);
+            border-radius: 4px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 10px;
+            opacity: 0.8;
+        }
+
+        .secondary-content {
+            font-size: 12px;
+            color: var(--text-muted);
+        }
+
+        /* Detection list in secondary card */
+        .mini-detection-list {
+            max-height: 60px;
+            overflow-y: auto;
+            scrollbar-width: thin;
+        }
+
+        .mini-detection-item {
+            background: rgba(50, 50, 50, 0.5);
+            border-radius: 4px;
+            padding: 4px 8px;
+            margin-bottom: 4px;
+            font-size: 10px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .mini-detection-item.cat {
+            border-left: 2px solid var(--accent-green);
+        }
+
+        .mini-detection-item.dog {
+            border-left: 2px solid var(--primary-blue);
+        }
+
+        /* Status grid */
+        .status-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 4px;
+            height: 60px;
+        }
+
+        .status-mini {
+            background: rgba(50, 50, 50, 0.5);
+            border-radius: 4px;
+            padding: 4px;
+            text-align: center;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+        }
+
+        .status-mini-value {
+            font-size: 14px;
+            font-weight: 600;
+            color: var(--primary-blue);
+            margin-bottom: 2px;
+        }
+
+        .status-mini-label {
+            font-size: 8px;
+            color: var(--text-muted);
+            text-transform: uppercase;
+        }
+
+        /* Progress in secondary */
+        .progress-mini {
+            background: rgba(50, 50, 50, 0.5);
+            border-radius: 4px;
+            padding: 8px;
+            height: 60px;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+        }
+
+        .progress-bar-mini {
+            width: 100%;
+            height: 6px;
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 3px;
+            margin: 4px 0;
+            overflow: hidden;
+        }
+
+        .progress-fill-mini {
+            height: 100%;
+            background: linear-gradient(90deg, var(--primary-blue), var(--accent-green));
+            border-radius: 3px;
+            transition: width 0.3s ease;
+        }
+
+        .progress-text-mini {
+            font-size: 10px;
+            color: var(--text-secondary);
+            text-align: center;
+        }
+
+        /* Components status */
+        .components-mini {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 4px;
+            height: 60px;
+        }
+
+        .component-mini {
+            background: rgba(50, 50, 50, 0.5);
+            border-radius: 4px;
+            padding: 4px;
+            text-align: center;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+        }
+
+        .component-status-mini {
+            font-size: 12px;
+            margin-bottom: 2px;
+        }
+
+        .component-status-mini.online {
+            color: var(--accent-green);
+        }
+
+        .component-status-mini.offline {
+            color: #FF6B6B;
+        }
+
+        .component-label-mini {
+            font-size: 7px;
+            color: var(--text-muted);
+            text-transform: uppercase;
+        }
+
+        /* Loading animation */
+        .loading {
+            display: inline-block;
+            width: 16px;
+            height: 16px;
+            border: 2px solid transparent;
+            border-top: 2px solid var(--primary-blue);
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        .no-data {
+            text-align: center;
+            color: var(--text-muted);
+            font-style: italic;
+            padding: 40px 20px;
+            font-size: 14px;
+        }
+
+        /* Floating refresh button */
+        .fab {
+            position: fixed;
+            bottom: 30px;
+            right: 30px;
+            width: 56px;
+            height: 56px;
+            background: linear-gradient(135deg, var(--primary-blue), var(--accent-green));
+            border: none;
+            border-radius: 50%;
+            color: white;
+            font-size: 20px;
+            cursor: pointer;
+            box-shadow: var(--glow-blue);
+            transition: all 0.3s ease;
+            z-index: 1000;
+        }
+
+        .fab:hover {
+            transform: scale(1.1);
+            box-shadow: 0 0 30px var(--primary-blue);
+        }
+
+        .fab:active {
+            transform: scale(0.95);
+        }
+
+        /* Responsive design */
+        @media (max-width: 1024px) {
+            body {
+                padding: 20px;
+            }
+
+            .container {
+                grid-template-columns: 1fr;
+                grid-template-rows: auto auto auto auto;
+                gap: 20px;
+            }
+
+            .main-card {
+                height: 300px;
+            }
+
+            .secondary-bar {
+                grid-template-columns: 1fr 1fr;
+                grid-template-rows: auto auto;
+            }
+        }
+
+        @media (max-width: 768px) {
+            body {
+                padding: 16px;
+            }
+
+            .header {
+                padding: 16px 20px;
+            }
+
+            .main-card {
+                height: 250px;
+                padding: 16px;
+            }
+
+            .secondary-bar {
+                grid-template-columns: 1fr;
+                grid-template-rows: auto auto auto auto;
+                height: auto;
+            }
+
+            .fab {
+                width: 48px;
+                height: 48px;
+                font-size: 18px;
+            }
+        }
+
+        /* Entry animations */
+        @keyframes fadeInUp {
+            from {
+                opacity: 0;
+                transform: translateY(30px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .main-card, .secondary-card {
+            animation: fadeInUp 0.8s ease-out forwards;
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>🐱 AI宠物监控系统</h1>
+        <div class="subtitle">聚焦核心功能 • 实时监控 • 智能分析 • 3D空间定位</div>
+    </div>
+
+    <div class="container">
+        <!-- 主要功能区域 -->
+
+        <!-- 实时监控 -->
+        <div class="main-card video">
+            <div class="card-header">
+                <div class="card-title">
+                    <div class="card-icon video">📹</div>
+                    <span>实时监控</span>
+                </div>
+                <div class="status-indicator"></div>
+            </div>
+            <div class="video-container">
+                <img class="video-stream" src="{{ url_for('video_feed') }}" alt="Live Video Feed" />
+                <div class="video-overlay">
+                    <div class="video-info">🔴 LIVE</div>
+                    <div class="video-info" id="frame-info">帧: 0/0</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 智能分析 -->
+        <div class="main-card analysis">
+            <div class="card-header">
+                <div class="card-title">
+                    <div class="card-icon analysis">🤖</div>
+                    <span>智能分析</span>
+                </div>
+                <div style="font-size: 12px; color: var(--text-muted);">VLM</div>
+            </div>
+            <div class="analysis-container">
+                <div class="analysis-timestamp" id="analysis-timestamp">
+                    等待分析结果...
+                </div>
+                <div class="analysis-text" id="vlm-analysis-text">
+                    增强猫检测系统正在运行中，采用先进的多模态AI技术对宠物行为进行实时分析和理解。系统集成了YOLO目标检测、VLM视觉语言模型和USD 3D空间建模技术，能够准确识别宠物类型、分析行为状态并进行精确的空间定位。
+                </div>
+            </div>
+        </div>
+
+        <!-- 3D空间 -->
+        <div class="main-card spatial">
+            <div class="card-header">
+                <div class="card-title">
+                    <div class="card-icon spatial">🏠</div>
+                    <span>3D空间</span>
+                </div>
+                <div style="font-size: 12px; color: var(--text-muted);">USD模型</div>
+            </div>
+            <div class="spatial-container">
+                <div id="3d-visualization">
+                    <div class="no-data">正在生成3D可视化...</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 次要信息区域 -->
+        <div class="secondary-bar">
+            <!-- 检测结果 -->
+            <div class="secondary-card">
+                <div class="secondary-header">
+                    <div class="secondary-icon">🎯</div>
+                    <span>检测结果</span>
+                    <span id="detection-count" style="margin-left: auto; font-size: 10px;">0</span>
+                </div>
+                <div class="mini-detection-list" id="detections-container">
+                    <div style="text-align: center; color: var(--text-muted); font-size: 10px; padding: 8px;">
+                        等待检测...
+                    </div>
+                </div>
+            </div>
+
+            <!-- 播放进度 -->
+            <div class="secondary-card">
+                <div class="secondary-header">
+                    <div class="secondary-icon">📊</div>
+                    <span>播放进度</span>
+                </div>
+                <div class="progress-mini">
+                    <div class="progress-text-mini" id="progress-text">0% • 0/0</div>
+                    <div class="progress-bar-mini">
+                        <div class="progress-fill-mini" id="progress-fill" style="width: 0%;"></div>
+                    </div>
+                    <div style="display: flex; justify-content: space-between; margin-top: 4px;">
+                        <span style="font-size: 9px; color: var(--text-muted);">🐱 <span id="cat-count">0</span></span>
+                        <span style="font-size: 9px; color: var(--text-muted);">🐶 <span id="dog-count">0</span></span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 系统状态 -->
+            <div class="secondary-card">
+                <div class="secondary-header">
+                    <div class="secondary-icon">⚡</div>
+                    <span>系统状态</span>
+                </div>
+                <div class="status-grid" id="status-grid">
+                    <div class="status-mini">
+                        <div class="status-mini-value"><div class="loading"></div></div>
+                        <div class="status-mini-label">运行</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 组件状态 -->
+            <div class="secondary-card">
+                <div class="secondary-header">
+                    <div class="secondary-icon">🔧</div>
+                    <span>组件状态</span>
+                </div>
+                <div class="components-mini" id="components-mini">
+                    <div class="component-mini">
+                        <div class="component-status-mini">⚪</div>
+                        <div class="component-label-mini">YOLO</div>
+                    </div>
+                    <div class="component-mini">
+                        <div class="component-status-mini">⚪</div>
+                        <div class="component-label-mini">USD</div>
+                    </div>
+                    <div class="component-mini">
+                        <div class="component-status-mini">⚪</div>
+                        <div class="component-label-mini">3D</div>
+                    </div>
+                    <div class="component-mini">
+                        <div class="component-status-mini">⚪</div>
+                        <div class="component-label-mini">VLM</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <button class="fab" onclick="location.reload()" title="刷新页面">
+        🔄
+    </button>
+
+    <script>
+        // Global variables
+        let currentFrame = 0;
+        let totalFrames = 0;
+
+        // Status update function
+        function updateSystemStatus() {
+            fetch('/api/status')
+                .then(response => response.json())
+                .then(data => {
+                    if (data.error) {
+                        console.error('Status error:', data.error);
+                        return;
+                    }
+
+                    currentFrame = data.current_frame || 0;
+                    totalFrames = data.total_frames || 0;
+
+                    // Update frame info
+                    document.getElementById('frame-info').textContent = `帧: ${currentFrame}/${totalFrames}`;
+
+                    // Update progress
+                    const progressPercent = totalFrames > 0 ? (currentFrame / totalFrames * 100) : 0;
+                    document.getElementById('progress-text').textContent = `${progressPercent.toFixed(1)}% • ${currentFrame}/${totalFrames}`;
+                    document.getElementById('progress-fill').style.width = `${progressPercent}%`;
+
+                    // Update status grid
+                    const statusGrid = document.getElementById('status-grid');
+                    statusGrid.innerHTML = `
+                        <div class="status-mini">
+                            <div class="status-mini-value" style="color: ${data.running ? 'var(--accent-green)' : '#FF6B6B'};">${data.running ? '●' : '○'}</div>
+                            <div class="status-mini-label">运行</div>
+                        </div>
+                        <div class="status-mini">
+                            <div class="status-mini-value">${data.current_detections || 0}</div>
+                            <div class="status-mini-label">检测</div>
+                        </div>
+                        <div class="status-mini">
+                            <div class="status-mini-value">${(data.cat_detection_rate || 0).toFixed(0)}%</div>
+                            <div class="status-mini-label">检出率</div>
+                        </div>
+                        <div class="status-mini">
+                            <div class="status-mini-value">${Math.floor(data.uptime_seconds || 0)}</div>
+                            <div class="status-mini-label">运行时长</div>
+                        </div>
+                    `;
+
+                    // Update counts
+                    document.getElementById('cat-count').textContent = data.cat_detections || 0;
+                    document.getElementById('dog-count').textContent = data.dog_detections || 0;
+
+                    // Update components
+                    const componentsMini = document.getElementById('components-mini');
+                    componentsMini.innerHTML = `
+                        <div class="component-mini">
+                            <div class="component-status-mini ${data.components?.yolo_loaded ? 'online' : 'offline'}">●</div>
+                            <div class="component-label-mini">YOLO</div>
+                        </div>
+                        <div class="component-mini">
+                            <div class="component-status-mini ${data.components?.usd_model_loaded ? 'online' : 'offline'}">●</div>
+                            <div class="component-label-mini">USD</div>
+                        </div>
+                        <div class="component-mini">
+                            <div class="component-status-mini ${data.components?.['3d_model_loaded'] ? 'online' : 'offline'}">●</div>
+                            <div class="component-label-mini">3D</div>
+                        </div>
+                        <div class="component-mini">
+                            <div class="component-status-mini ${data.components?.vlm_cat_frames > 0 ? 'online' : 'offline'}">●</div>
+                            <div class="component-label-mini">VLM</div>
+                        </div>
+                    `;
+                })
+                .catch(error => console.error('Error fetching status:', error));
+        }
+
+        // Detection results update function
+        function updateDetections() {
+            fetch('/api/detections')
+                .then(response => response.json())
+                .then(data => {
+                    if (data.error) {
+                        console.error('Detections error:', data.error);
+                        return;
+                    }
+
+                    const detectionsContainer = document.getElementById('detections-container');
+                    const detectionCount = document.getElementById('detection-count');
+
+                    if (!data.current_detections || data.current_detections.length === 0) {
+                        detectionsContainer.innerHTML = '<div style="text-align: center; color: var(--text-muted); font-size: 10px; padding: 8px;">暂无检测</div>';
+                        detectionCount.textContent = '0';
+                    } else {
+                        detectionCount.textContent = data.current_detections.length;
+
+                        detectionsContainer.innerHTML = data.current_detections.map(detection => {
+                            const petEmoji = detection.class_name === 'cat' ? '🐱' : '🐶';
+                            const confidence = (detection.confidence * 100).toFixed(0);
+
+                            return `
+                                <div class="mini-detection-item ${detection.class_name}">
+                                    <span>${petEmoji} ${detection.class_name}</span>
+                                    <span style="color: var(--accent-green); font-weight: 600;">${confidence}%</span>
+                                </div>
+                            `;
+                        }).join('');
+                    }
+
+                    // Update VLM analysis
+                    if (data.latest_vlm_analysis) {
+                        const analysisTimestamp = document.getElementById('analysis-timestamp');
+                        const analysisText = document.getElementById('vlm-analysis-text');
+
+                        const timestamp = new Date(data.latest_vlm_analysis.timestamp * 1000);
+                        analysisTimestamp.textContent = `最后更新: ${timestamp.toLocaleTimeString()}`;
+                        analysisText.textContent = data.latest_vlm_analysis.text;
+                    }
+                })
+                .catch(error => console.error('Error fetching detections:', error));
+        }
+
+        // 3D visualization update function
+        function update3DVisualization() {
+            fetch('/api/3d_visualization')
+                .then(response => response.json())
+                .then(data => {
+                    const visualizationDiv = document.getElementById('3d-visualization');
+
+                    if (data.error) {
+                        visualizationDiv.innerHTML = '<div class="no-data">暂无3D可视化数据</div>';
+                    } else if (data.image) {
+                        visualizationDiv.innerHTML = `<img class="spatial-image" src="data:image/png;base64,${data.image}" alt="3D Visualization" />`;
+                    }
+                })
+                .catch(error => {
+                    console.error('Error fetching 3D visualization:', error);
+                    document.getElementById('3d-visualization').innerHTML = '<div class="no-data">3D可视化加载失败</div>';
+                });
+        }
+
+        // Initialize page
+        document.addEventListener('DOMContentLoaded', function() {
+            // Add staggered animation to cards
+            const cards = document.querySelectorAll('.main-card, .secondary-card');
+            cards.forEach((card, index) => {
+                card.style.animationDelay = `${index * 0.15}s`;
+            });
+
+            // Immediate updates
+            updateSystemStatus();
+            updateDetections();
+            update3DVisualization();
+
+            // Set up periodic updates
+            setInterval(updateSystemStatus, 4000);    // Every 4 seconds
+            setInterval(updateDetections, 2000);      // Every 2 seconds
+            setInterval(update3DVisualization, 8000); // Every 8 seconds
+        });
+
+        // Error handling
+        window.onerror = function(msg, url, line, col, error) {
+            console.error('JavaScript Error:', msg);
+            return false;
+        };
+    </script>
+</body>
+</html>

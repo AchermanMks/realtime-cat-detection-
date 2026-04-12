@@ -1,0 +1,46 @@
+{
+  "demo_info": {
+    "timestamp": "2026-04-10T12:29:40.651410",
+    "description": "Pet 3D Localization Visualization Demo",
+    "technology_stack": [
+      "YOLOv8 Pet Detection",
+      "Homography Coordinate Transformation",
+      "RoomPlan 3D Room Modeling",
+      "Interactive Web Visualization"
+    ]
+  },
+  "detection_summary": {
+    "total_detections": 15,
+    "valid_3d_localizations": 15,
+    "success_rate_percent": 100.0,
+    "cat_detections": 3,
+    "dog_detections": 12
+  },
+  "spatial_analysis": {
+    "room_dimensions": {
+      "x_range_meters": "-0.87 to 2.98",
+      "y_range_meters": "-2.75 to 2.15"
+    },
+    "position_distribution": {
+      "上方": 1,
+      "右侧": 6,
+      "右下角": 8
+    },
+    "most_active_area": "右下角"
+  },
+  "temporal_analysis": {
+    "frame_span": 6750,
+    "total_unique_frames": 14,
+    "first_detection_frame": 3210,
+    "last_detection_frame": 9960,
+    "average_detections_per_frame": 1.0714285714285714
+  },
+  "key_frames": [
+    3210,
+    7500,
+    7560,
+    7620,
+    8130,
+    8430
+  ]
+}

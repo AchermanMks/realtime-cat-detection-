@@ -1,6 +1,0 @@
-{
-  "working_rtsp_url": "rtsp://admin:admin123@192.168.31.146:8554/stream1",
-  "camera_ip": "192.168.31.146",
-  "rtsp_port": 8554,
-  "tested_at": "2026-03-23 17:57:04"
-}

@@ -1,0 +1,951 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <title>🐱 AI宠物监控系统</title>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
+            color: #2c3e50;
+            min-height: 100vh;
+            padding: 20px;
+            line-height: 1.6;
+        }
+
+        /* Header */
+        .header {
+            text-align: center;
+            margin-bottom: 30px;
+            background: white;
+            padding: 25px;
+            border-radius: 12px;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+        }
+
+        .header h1 {
+            font-size: 32px;
+            font-weight: 700;
+            color: #2c3e50;
+            margin-bottom: 8px;
+        }
+
+        .header .subtitle {
+            font-size: 16px;
+            color: #7f8c8d;
+            font-weight: 500;
+        }
+
+        .header .description {
+            font-size: 14px;
+            color: #95a5a6;
+            margin-top: 5px;
+        }
+
+        /* Main container */
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            display: grid;
+            grid-template-columns: 2fr 1fr;
+            grid-template-rows: 1fr auto;
+            gap: 20px;
+            min-height: calc(100vh - 200px);
+        }
+
+        /* Left main section */
+        .main-section {
+            display: grid;
+            grid-template-rows: 2fr 1fr;
+            gap: 20px;
+        }
+
+        /* Right sidebar */
+        .sidebar {
+            display: grid;
+            grid-template-rows: 1fr 1fr;
+            gap: 20px;
+        }
+
+        /* Bottom analysis section */
+        .analysis-section {
+            grid-column: 1 / -1;
+            display: grid;
+            grid-template-columns: 2fr 1fr;
+            gap: 20px;
+        }
+
+        /* Card base style */
+        .card {
+            background: white;
+            border-radius: 12px;
+            padding: 24px;
+            box-shadow: 0 2px 15px rgba(0, 0, 0, 0.08);
+            border: 1px solid rgba(0, 0, 0, 0.05);
+            transition: all 0.3s ease;
+        }
+
+        .card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 25px rgba(0, 0, 0, 0.12);
+        }
+
+        .card-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 20px;
+            padding-bottom: 12px;
+            border-bottom: 1px solid #ecf0f1;
+        }
+
+        .card-title {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            font-size: 18px;
+            font-weight: 600;
+            color: #2c3e50;
+        }
+
+        .card-icon {
+            width: 32px;
+            height: 32px;
+            background: linear-gradient(135deg, #3498db, #2980b9);
+            color: white;
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 16px;
+            box-shadow: 0 2px 8px rgba(52, 152, 219, 0.3);
+        }
+
+        .status-indicator {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: #27ae60;
+            box-shadow: 0 0 8px rgba(39, 174, 96, 0.5);
+            animation: pulse 2s ease-in-out infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; transform: scale(1); }
+            50% { opacity: 0.7; transform: scale(1.1); }
+        }
+
+        /* Video panel */
+        .video-panel {
+            position: relative;
+        }
+
+        .video-container {
+            position: relative;
+            width: 100%;
+            height: calc(100% - 70px);
+            background: #34495e;
+            border-radius: 8px;
+            overflow: hidden;
+            box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.1);
+        }
+
+        .video-stream {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            border-radius: 8px;
+        }
+
+        .video-overlay {
+            position: absolute;
+            top: 12px;
+            left: 12px;
+            right: 12px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            z-index: 10;
+        }
+
+        .video-info {
+            background: rgba(0, 0, 0, 0.7);
+            color: white;
+            padding: 6px 12px;
+            border-radius: 6px;
+            font-size: 12px;
+            font-weight: 500;
+            backdrop-filter: blur(4px);
+        }
+
+        /* Detection panel */
+        .detection-panel {
+            position: relative;
+        }
+
+        .detection-list {
+            max-height: calc(100% - 70px);
+            overflow-y: auto;
+            scrollbar-width: thin;
+            scrollbar-color: #bdc3c7 #ecf0f1;
+        }
+
+        .detection-list::-webkit-scrollbar {
+            width: 6px;
+        }
+
+        .detection-list::-webkit-scrollbar-track {
+            background: #ecf0f1;
+            border-radius: 3px;
+        }
+
+        .detection-list::-webkit-scrollbar-thumb {
+            background: #bdc3c7;
+            border-radius: 3px;
+        }
+
+        .detection-item {
+            background: #f8f9fa;
+            border: 1px solid #e9ecef;
+            border-radius: 8px;
+            padding: 16px;
+            margin-bottom: 12px;
+            transition: all 0.2s ease;
+            border-left: 4px solid #27ae60;
+        }
+
+        .detection-item.dog {
+            border-left-color: #3498db;
+        }
+
+        .detection-item.enhanced {
+            border-left-color: #f39c12;
+            background: #fdf6e3;
+        }
+
+        .detection-item:hover {
+            background: #e8f4f8;
+            transform: translateX(3px);
+        }
+
+        .pet-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 12px;
+        }
+
+        .pet-name {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 16px;
+            font-weight: 600;
+            color: #2c3e50;
+        }
+
+        .pet-emoji {
+            font-size: 20px;
+        }
+
+        .confidence-badge {
+            background: #27ae60;
+            color: white;
+            padding: 4px 8px;
+            border-radius: 12px;
+            font-size: 12px;
+            font-weight: 600;
+        }
+
+        .detection-details {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 12px;
+            font-size: 14px;
+        }
+
+        .detail-item {
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+        }
+
+        .detail-label {
+            color: #7f8c8d;
+            font-size: 12px;
+            font-weight: 500;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .detail-value {
+            color: #2c3e50;
+            font-weight: 500;
+        }
+
+        /* 3D Visualization panel */
+        .visualization-panel {
+            position: relative;
+        }
+
+        .visualization-container {
+            width: 100%;
+            height: calc(100% - 70px);
+            background: #f8f9fa;
+            border: 1px solid #e9ecef;
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            overflow: hidden;
+        }
+
+        .visualization-image {
+            max-width: 100%;
+            max-height: 100%;
+            object-fit: contain;
+            border-radius: 4px;
+        }
+
+        /* Status panel */
+        .status-panel {
+            position: relative;
+        }
+
+        .status-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 16px;
+            height: calc(100% - 70px);
+        }
+
+        .status-item {
+            background: #f8f9fa;
+            border: 1px solid #e9ecef;
+            border-radius: 8px;
+            padding: 16px;
+            text-align: center;
+            transition: all 0.2s ease;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+        }
+
+        .status-item:hover {
+            background: #e3f2fd;
+            border-color: #3498db;
+        }
+
+        .status-value {
+            font-size: 24px;
+            font-weight: 700;
+            color: #2980b9;
+            margin-bottom: 4px;
+        }
+
+        .status-value.error {
+            color: #e74c3c;
+        }
+
+        .status-label {
+            font-size: 12px;
+            color: #7f8c8d;
+            font-weight: 500;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        /* Analysis panels */
+        .analysis-card {
+            background: white;
+            border-radius: 12px;
+            padding: 24px;
+            box-shadow: 0 2px 15px rgba(0, 0, 0, 0.08);
+            border: 1px solid rgba(0, 0, 0, 0.05);
+        }
+
+        .vlm-analysis {
+            position: relative;
+        }
+
+        .analysis-text {
+            font-size: 15px;
+            line-height: 1.7;
+            color: #2c3e50;
+            background: #f8f9fa;
+            border: 1px solid #e9ecef;
+            border-radius: 8px;
+            padding: 20px;
+            height: calc(100% - 90px);
+            overflow-y: auto;
+            border-left: 4px solid #f39c12;
+        }
+
+        .analysis-timestamp {
+            font-size: 12px;
+            color: #95a5a6;
+            margin-bottom: 12px;
+            font-weight: 500;
+        }
+
+        .system-status {
+            position: relative;
+        }
+
+        .status-overview {
+            height: calc(100% - 70px);
+            overflow-y: auto;
+        }
+
+        .status-section {
+            margin-bottom: 16px;
+        }
+
+        .status-section-title {
+            font-size: 14px;
+            font-weight: 600;
+            color: #2c3e50;
+            margin-bottom: 8px;
+        }
+
+        .progress-bar {
+            width: 100%;
+            height: 6px;
+            background: #ecf0f1;
+            border-radius: 3px;
+            margin: 8px 0;
+            overflow: hidden;
+        }
+
+        .progress-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #3498db, #2980b9);
+            border-radius: 3px;
+            transition: width 0.3s ease;
+        }
+
+        .component-status {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 8px;
+            margin-top: 12px;
+        }
+
+        .component-item {
+            background: #f8f9fa;
+            border: 1px solid #e9ecef;
+            border-radius: 6px;
+            padding: 8px;
+            text-align: center;
+            font-size: 12px;
+        }
+
+        .component-icon {
+            font-size: 16px;
+            margin-bottom: 4px;
+        }
+
+        .component-icon.online {
+            color: #27ae60;
+        }
+
+        .component-icon.offline {
+            color: #e74c3c;
+        }
+
+        /* Loading animation */
+        .loading {
+            display: inline-block;
+            width: 20px;
+            height: 20px;
+            border: 2px solid #ecf0f1;
+            border-radius: 50%;
+            border-top-color: #3498db;
+            animation: spin 1s ease-in-out infinite;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        .no-data {
+            text-align: center;
+            color: #95a5a6;
+            font-style: italic;
+            padding: 40px 20px;
+            font-weight: 500;
+        }
+
+        /* Floating refresh button */
+        .refresh-btn {
+            position: fixed;
+            bottom: 30px;
+            right: 30px;
+            width: 56px;
+            height: 56px;
+            background: #3498db;
+            border: none;
+            border-radius: 50%;
+            color: white;
+            font-size: 20px;
+            cursor: pointer;
+            box-shadow: 0 4px 20px rgba(52, 152, 219, 0.3);
+            transition: all 0.3s ease;
+            z-index: 1000;
+        }
+
+        .refresh-btn:hover {
+            transform: scale(1.1);
+            background: #2980b9;
+            box-shadow: 0 6px 25px rgba(52, 152, 219, 0.4);
+        }
+
+        .refresh-btn:active {
+            transform: scale(0.95);
+        }
+
+        /* Responsive design */
+        @media (max-width: 1200px) {
+            .container {
+                grid-template-columns: 1fr;
+                grid-template-rows: auto auto auto auto;
+            }
+
+            .main-section {
+                grid-template-columns: 1fr 1fr;
+                grid-template-rows: auto auto;
+            }
+
+            .video-panel {
+                grid-column: 1 / -1;
+                height: 400px;
+            }
+
+            .visualization-panel {
+                grid-column: 1;
+            }
+
+            .sidebar {
+                grid-template-columns: 1fr 1fr;
+                grid-template-rows: auto;
+            }
+
+            .analysis-section {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        @media (max-width: 768px) {
+            body {
+                padding: 12px;
+            }
+
+            .container {
+                gap: 16px;
+            }
+
+            .card, .analysis-card {
+                padding: 16px;
+            }
+
+            .header h1 {
+                font-size: 24px;
+            }
+
+            .main-section,
+            .sidebar,
+            .component-status {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        /* Entry animation */
+        @keyframes fadeInUp {
+            from {
+                opacity: 0;
+                transform: translateY(30px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .card, .analysis-card {
+            animation: fadeInUp 0.6s ease-out forwards;
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>🐱 AI宠物监控系统</h1>
+        <div class="subtitle">智能检测 • 3D空间定位 • 行为分析</div>
+        <div class="description">基于YOLO + VLM + USD的多模态人工智能宠物监控解决方案</div>
+    </div>
+
+    <div class="container">
+        <!-- 主要区域 -->
+        <div class="main-section">
+            <!-- 实时视频监控 -->
+            <div class="card video-panel">
+                <div class="card-header">
+                    <div class="card-title">
+                        <div class="card-icon">📹</div>
+                        <span>实时视频监控</span>
+                    </div>
+                    <div class="status-indicator"></div>
+                </div>
+                <div class="video-container">
+                    <img class="video-stream" src="{{ url_for('video_feed') }}" alt="Live Video Feed" />
+                    <div class="video-overlay">
+                        <div class="video-info" id="video-info">
+                            🔴 LIVE
+                        </div>
+                        <div class="video-info" id="frame-info">
+                            帧: 0/0
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 3D空间可视化 -->
+            <div class="card visualization-panel">
+                <div class="card-header">
+                    <div class="card-title">
+                        <div class="card-icon">🏠</div>
+                        <span>3D空间定位</span>
+                    </div>
+                    <div style="font-size: 12px; color: #7f8c8d;">USD模型</div>
+                </div>
+                <div class="visualization-container">
+                    <div id="3d-visualization">
+                        <div class="no-data">正在生成3D可视化...</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 侧边栏 -->
+        <div class="sidebar">
+            <!-- 检测结果 -->
+            <div class="card detection-panel">
+                <div class="card-header">
+                    <div class="card-title">
+                        <div class="card-icon">🎯</div>
+                        <span>检测结果</span>
+                    </div>
+                    <div id="detection-count" style="font-size: 12px; color: #7f8c8d;">0 个检测</div>
+                </div>
+                <div class="detection-list" id="detections-container">
+                    <div class="no-data">等待检测结果...</div>
+                </div>
+            </div>
+
+            <!-- 系统状态 -->
+            <div class="card status-panel">
+                <div class="card-header">
+                    <div class="card-title">
+                        <div class="card-icon">⚡</div>
+                        <span>系统状态</span>
+                    </div>
+                </div>
+                <div class="status-grid" id="status-container">
+                    <div class="status-item">
+                        <div class="status-value"><div class="loading"></div></div>
+                        <div class="status-label">加载中</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 分析区域 -->
+        <div class="analysis-section">
+            <div class="analysis-card vlm-analysis">
+                <div class="card-header">
+                    <div class="card-title">
+                        <div class="card-icon">🤖</div>
+                        <span>AI行为分析</span>
+                    </div>
+                </div>
+                <div class="analysis-timestamp" id="analysis-timestamp">
+                    等待分析结果...
+                </div>
+                <div class="analysis-text" id="vlm-analysis-text">
+                    增强猫检测系统正在运行中，采用多模态人工智能技术对宠物行为进行实时分析和理解。系统集成了YOLO目标检测、VLM视觉语言模型和USD 3D空间建模技术，能够准确识别宠物类型、分析行为状态并进行精确的空间定位。
+                </div>
+            </div>
+
+            <div class="analysis-card system-status">
+                <div class="card-header">
+                    <div class="card-title">
+                        <div class="card-icon">📊</div>
+                        <span>系统概览</span>
+                    </div>
+                </div>
+                <div class="status-overview" id="status-overview">
+                    <div class="status-section">
+                        <div class="status-section-title">播放进度</div>
+                        <div style="display: flex; justify-content: space-between; font-size: 12px; color: #7f8c8d; margin-bottom: 4px;">
+                            <span>当前进度</span>
+                            <span id="progress-text">0%</span>
+                        </div>
+                        <div class="progress-bar">
+                            <div class="progress-fill" id="progress-fill" style="width: 0%;"></div>
+                        </div>
+                    </div>
+
+                    <div class="status-section">
+                        <div class="status-section-title">检测统计</div>
+                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 8px;">
+                            <div style="text-align: center; padding: 8px; background: #e8f5e8; border-radius: 6px;">
+                                <div style="font-size: 18px; font-weight: 600; color: #27ae60;" id="cat-count">0</div>
+                                <div style="font-size: 10px; color: #7f8c8d;">猫检测</div>
+                            </div>
+                            <div style="text-align: center; padding: 8px; background: #e3f2fd; border-radius: 6px;">
+                                <div style="font-size: 18px; font-weight: 600; color: #2196f3;" id="dog-count">0</div>
+                                <div style="font-size: 10px; color: #7f8c8d;">狗检测</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="status-section">
+                        <div class="status-section-title">组件状态</div>
+                        <div class="component-status" id="component-status">
+                            <div class="component-item">
+                                <div class="component-icon">⚪</div>
+                                <div>YOLO</div>
+                            </div>
+                            <div class="component-item">
+                                <div class="component-icon">⚪</div>
+                                <div>USD模型</div>
+                            </div>
+                            <div class="component-item">
+                                <div class="component-icon">⚪</div>
+                                <div>3D定位</div>
+                            </div>
+                            <div class="component-item">
+                                <div class="component-icon">⚪</div>
+                                <div>VLM数据</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <button class="refresh-btn" onclick="location.reload()" title="刷新页面">
+        🔄
+    </button>
+
+    <script>
+        // Global variables
+        let currentFrame = 0;
+        let totalFrames = 0;
+
+        // Status update function
+        function updateSystemStatus() {
+            fetch('/api/status')
+                .then(response => response.json())
+                .then(data => {
+                    if (data.error) {
+                        console.error('Status error:', data.error);
+                        return;
+                    }
+
+                    currentFrame = data.current_frame || 0;
+                    totalFrames = data.total_frames || 0;
+
+                    // Update frame info
+                    document.getElementById('frame-info').textContent = `帧: ${currentFrame}/${totalFrames}`;
+
+                    // Update progress
+                    const progressPercent = totalFrames > 0 ? (currentFrame / totalFrames * 100) : 0;
+                    document.getElementById('progress-text').textContent = `${progressPercent.toFixed(1)}%`;
+                    document.getElementById('progress-fill').style.width = `${progressPercent}%`;
+
+                    // Update main status grid
+                    const statusContainer = document.getElementById('status-container');
+                    statusContainer.innerHTML = `
+                        <div class="status-item">
+                            <div class="status-value ${data.running ? '' : 'error'}">${data.running ? '运行中' : '已停止'}</div>
+                            <div class="status-label">系统状态</div>
+                        </div>
+                        <div class="status-item">
+                            <div class="status-value">${data.current_detections || 0}</div>
+                            <div class="status-label">当前检测</div>
+                        </div>
+                        <div class="status-item">
+                            <div class="status-value">${(data.cat_detection_rate || 0).toFixed(1)}%</div>
+                            <div class="status-label">检测率</div>
+                        </div>
+                        <div class="status-item">
+                            <div class="status-value">${Math.floor(data.uptime_seconds || 0)}s</div>
+                            <div class="status-label">运行时长</div>
+                        </div>
+                    `;
+
+                    // Update detection counts
+                    document.getElementById('cat-count').textContent = data.cat_detections || 0;
+                    document.getElementById('dog-count').textContent = data.dog_detections || 0;
+
+                    // Update component status
+                    const componentStatus = document.getElementById('component-status');
+                    componentStatus.innerHTML = `
+                        <div class="component-item">
+                            <div class="component-icon ${data.components?.yolo_loaded ? 'online' : 'offline'}">${data.components?.yolo_loaded ? '🟢' : '🔴'}</div>
+                            <div>YOLO</div>
+                        </div>
+                        <div class="component-item">
+                            <div class="component-icon ${data.components?.usd_model_loaded ? 'online' : 'offline'}">${data.components?.usd_model_loaded ? '🟢' : '🔴'}</div>
+                            <div>USD模型</div>
+                        </div>
+                        <div class="component-item">
+                            <div class="component-icon ${data.components?.['3d_model_loaded'] ? 'online' : 'offline'}">${data.components?.['3d_model_loaded'] ? '🟢' : '🔴'}</div>
+                            <div>3D定位</div>
+                        </div>
+                        <div class="component-item">
+                            <div class="component-icon ${data.components?.vlm_cat_frames > 0 ? 'online' : 'offline'}">${data.components?.vlm_cat_frames > 0 ? '🟢' : '🔴'}</div>
+                            <div>VLM数据</div>
+                        </div>
+                    `;
+                })
+                .catch(error => console.error('Error fetching status:', error));
+        }
+
+        // Detection results update function
+        function updateDetections() {
+            fetch('/api/detections')
+                .then(response => response.json())
+                .then(data => {
+                    if (data.error) {
+                        console.error('Detections error:', data.error);
+                        return;
+                    }
+
+                    const detectionsContainer = document.getElementById('detections-container');
+                    const detectionCount = document.getElementById('detection-count');
+
+                    if (!data.current_detections || data.current_detections.length === 0) {
+                        detectionsContainer.innerHTML = '<div class="no-data">暂无检测结果</div>';
+                        detectionCount.textContent = '0 个检测';
+                    } else {
+                        detectionCount.textContent = `${data.current_detections.length} 个检测`;
+
+                        detectionsContainer.innerHTML = data.current_detections.map(detection => {
+                            const isEnhanced = detection.detection_type === 'enhanced_cat' || detection.detection_type === 'vlm_assisted';
+                            const petEmoji = detection.class_name === 'cat' ? '🐱' : '🐶';
+                            const petName = detection.class_name === 'cat' ? '猫咪' : '狗狗';
+
+                            let detectionTypeText = '';
+                            if (detection.detection_type === 'enhanced_cat') {
+                                detectionTypeText = ' (增强检测)';
+                            } else if (detection.detection_type === 'vlm_assisted') {
+                                detectionTypeText = ' (VLM辅助)';
+                            }
+
+                            return `
+                                <div class="detection-item ${detection.class_name} ${isEnhanced ? 'enhanced' : ''}">
+                                    <div class="pet-header">
+                                        <div class="pet-name">
+                                            <span class="pet-emoji">${petEmoji}</span>
+                                            <span>${petName}${detectionTypeText}</span>
+                                        </div>
+                                        <div class="confidence-badge">${(detection.confidence * 100).toFixed(1)}%</div>
+                                    </div>
+                                    <div class="detection-details">
+                                        <div class="detail-item">
+                                            <div class="detail-label">像素坐标</div>
+                                            <div class="detail-value">(${detection.center.x}, ${detection.center.y})</div>
+                                        </div>
+                                        <div class="detail-item">
+                                            <div class="detail-label">帧编号</div>
+                                            <div class="detail-value">#${detection.frame_id}</div>
+                                        </div>
+                                        ${detection['3d_valid'] ? `
+                                        <div class="detail-item">
+                                            <div class="detail-label">物理坐标</div>
+                                            <div class="detail-value">(${detection['3d_position']['calibrated_coords'].x.toFixed(1)}, ${detection['3d_position']['calibrated_coords'].y.toFixed(1)}m)</div>
+                                        </div>
+                                        <div class="detail-item">
+                                            <div class="detail-label">房间位置</div>
+                                            <div class="detail-value">${detection['3d_position']['room_position']}</div>
+                                        </div>
+                                        ` : `
+                                        <div class="detail-item">
+                                            <div class="detail-label">3D状态</div>
+                                            <div class="detail-value" style="color: #e74c3c;">无法定位</div>
+                                        </div>
+                                        `}
+                                    </div>
+                                </div>
+                            `;
+                        }).join('');
+                    }
+
+                    // Update VLM analysis
+                    if (data.latest_vlm_analysis) {
+                        const analysisTimestamp = document.getElementById('analysis-timestamp');
+                        const analysisText = document.getElementById('vlm-analysis-text');
+
+                        const timestamp = new Date(data.latest_vlm_analysis.timestamp * 1000);
+                        analysisTimestamp.textContent = `最后更新: ${timestamp.toLocaleTimeString()}`;
+                        analysisText.textContent = data.latest_vlm_analysis.text;
+                    }
+                })
+                .catch(error => console.error('Error fetching detections:', error));
+        }
+
+        // 3D visualization update function
+        function update3DVisualization() {
+            fetch('/api/3d_visualization')
+                .then(response => response.json())
+                .then(data => {
+                    const visualizationDiv = document.getElementById('3d-visualization');
+
+                    if (data.error) {
+                        visualizationDiv.innerHTML = '<div class="no-data">暂无3D可视化数据</div>';
+                    } else if (data.image) {
+                        visualizationDiv.innerHTML = `<img class="visualization-image" src="data:image/png;base64,${data.image}" alt="3D Visualization" />`;
+                    }
+                })
+                .catch(error => {
+                    console.error('Error fetching 3D visualization:', error);
+                    document.getElementById('3d-visualization').innerHTML = '<div class="no-data">3D可视化加载失败</div>';
+                });
+        }
+
+        // Initialize page
+        document.addEventListener('DOMContentLoaded', function() {
+            // Add staggered animation to cards
+            const cards = document.querySelectorAll('.card, .analysis-card');
+            cards.forEach((card, index) => {
+                card.style.animationDelay = `${index * 0.1}s`;
+            });
+
+            // Immediate updates
+            updateSystemStatus();
+            updateDetections();
+            update3DVisualization();
+
+            // Set up periodic updates
+            setInterval(updateSystemStatus, 5000);    // Every 5 seconds
+            setInterval(updateDetections, 2000);      // Every 2 seconds
+            setInterval(update3DVisualization, 10000); // Every 10 seconds
+        });
+
+        // Error handling
+        window.onerror = function(msg, url, line, col, error) {
+            console.error('JavaScript Error:', msg, 'at', url, ':', line);
+            return false;
+        };
+    </script>
+</body>
+</html>

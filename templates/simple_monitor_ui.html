@@ -1,0 +1,361 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>监控系统</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            background: #1a1a1a;
+            color: #ffffff;
+            font-family: Arial, sans-serif;
+            overflow-x: hidden;
+        }
+
+        /* 顶部标题栏 */
+        .header {
+            background: #2a2a2a;
+            padding: 15px 30px;
+            border-bottom: 1px solid #333;
+            text-align: center;
+        }
+
+        .header h1 {
+            font-size: 24px;
+            font-weight: 600;
+        }
+
+        /* 主容器 */
+        .main-container {
+            display: flex;
+            height: calc(100vh - 70px);
+            gap: 20px;
+            padding: 20px;
+        }
+
+        /* 视频区域 - 占主要空间 */
+        .video-section {
+            flex: 3;
+            background: #000;
+            border-radius: 8px;
+            overflow: hidden;
+            position: relative;
+            border: 1px solid #333;
+            min-height: 0; /* 重要：允许flex item缩小 */
+            display: flex;
+            flex-direction: column;
+        }
+
+        .video-container {
+            width: 100%;
+            flex: 1; /* 填充所有可用空间 */
+            position: relative;
+            background: #000;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            overflow: hidden;
+        }
+
+        .video-stream {
+            width: auto;
+            height: auto;
+            max-width: 100%;
+            max-height: 100%;
+            object-fit: contain;
+            object-position: center;
+            display: block;
+            border-radius: 4px;
+        }
+
+        .video-overlay {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            right: 10px;
+            display: flex;
+            justify-content: space-between;
+            z-index: 10;
+        }
+
+        .video-info {
+            background: rgba(0, 0, 0, 0.7);
+            padding: 5px 10px;
+            border-radius: 4px;
+            font-size: 12px;
+            color: #00ff41;
+        }
+
+        /* 侧边信息面板 */
+        .info-panel {
+            flex: 1;
+            background: #2a2a2a;
+            border-radius: 8px;
+            padding: 20px;
+            border: 1px solid #333;
+            overflow-y: auto;
+        }
+
+        .info-section {
+            margin-bottom: 25px;
+        }
+
+        .info-section h3 {
+            font-size: 16px;
+            margin-bottom: 10px;
+            color: #00d4ff;
+            border-bottom: 1px solid #333;
+            padding-bottom: 5px;
+        }
+
+        .info-item {
+            margin: 8px 0;
+            font-size: 14px;
+            line-height: 1.4;
+        }
+
+        .status-indicator {
+            display: inline-block;
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            margin-right: 8px;
+        }
+
+        .status-online {
+            background: #00ff41;
+        }
+
+        .status-offline {
+            background: #ff4444;
+        }
+
+        /* 检测结果 */
+        .detection-item {
+            background: #333;
+            padding: 10px;
+            margin: 5px 0;
+            border-radius: 4px;
+            font-size: 12px;
+        }
+
+        /* 3D可视化区域 */
+        .viz-container {
+            width: 100%;
+            height: 200px;
+            background: #000;
+            border-radius: 4px;
+            border: 1px solid #333;
+            overflow: hidden;
+        }
+
+        .viz-image {
+            width: 100%;
+            height: 100%;
+            object-fit: contain;
+        }
+
+        /* 响应式设计 */
+        @media (max-width: 1200px) {
+            .main-container {
+                flex-direction: column;
+            }
+
+            .video-section {
+                height: 60vh;
+                min-height: 400px;
+            }
+
+            .info-panel {
+                height: auto;
+                max-height: 40vh;
+            }
+        }
+
+        @media (max-width: 768px) {
+            .main-container {
+                padding: 10px;
+                gap: 10px;
+            }
+
+            .video-section {
+                height: 50vh;
+                min-height: 300px;
+            }
+
+            .header {
+                padding: 10px 20px;
+            }
+        }
+
+        /* 确保视频完全自适应 */
+        @media (orientation: landscape) {
+            .video-stream {
+                width: auto;
+                height: 100%;
+                max-width: 100%;
+            }
+        }
+
+        @media (orientation: portrait) {
+            .video-stream {
+                width: 100%;
+                height: auto;
+                max-height: 100%;
+            }
+        }
+
+        /* 加载动画 */
+        .loading {
+            color: #666;
+            font-style: italic;
+        }
+    </style>
+</head>
+<body>
+    <!-- 顶部标题 -->
+    <div class="header">
+        <h1>🔴 实时监控系统</h1>
+    </div>
+
+    <!-- 主容器 -->
+    <div class="main-container">
+        <!-- 视频显示区域 -->
+        <div class="video-section">
+            <div class="video-container">
+                <img class="video-stream" src="{{ url_for('video_feed') }}" alt="监控画面" />
+                <div class="video-overlay">
+                    <div class="video-info">🔴 实时监控</div>
+                    <div class="video-info" id="frame-info">帧: 0/0</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 侧边信息面板 -->
+        <div class="info-panel">
+            <!-- 系统状态 -->
+            <div class="info-section">
+                <h3>📊 系统状态</h3>
+                <div class="info-item">
+                    <span class="status-indicator status-online"></span>
+                    <span id="system-status">系统运行中</span>
+                </div>
+                <div class="info-item">
+                    视频: <span id="video-status" class="loading">加载中...</span>
+                </div>
+                <div class="info-item">
+                    检测: <span id="detection-status" class="loading">初始化中...</span>
+                </div>
+                <div class="info-item">
+                    3D模型: <span id="model-status" class="loading">加载中...</span>
+                </div>
+            </div>
+
+            <!-- 检测结果 -->
+            <div class="info-section">
+                <h3>🎯 检测结果</h3>
+                <div id="detections-container">
+                    <div class="loading">等待检测数据...</div>
+                </div>
+            </div>
+
+            <!-- 3D可视化 -->
+            <div class="info-section">
+                <h3>🏠 3D空间</h3>
+                <div class="viz-container">
+                    <img id="viz-image" class="viz-image" src="/api/3d_visualization" alt="3D可视化" />
+                </div>
+            </div>
+
+            <!-- 统计信息 -->
+            <div class="info-section">
+                <h3>📈 统计</h3>
+                <div class="info-item">总检测: <span id="total-detections">0</span></div>
+                <div class="info-item">猫检测: <span id="cat-count">0</span></div>
+                <div class="info-item">检测率: <span id="detection-rate">0%</span></div>
+                <div class="info-item">运行时间: <span id="uptime">00:00:00</span></div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let startTime = new Date();
+
+        // 更新运行时间
+        function updateUptime() {
+            const now = new Date();
+            const diff = now - startTime;
+            const hours = Math.floor(diff / 3600000).toString().padStart(2, '0');
+            const minutes = Math.floor((diff % 3600000) / 60000).toString().padStart(2, '0');
+            const seconds = Math.floor((diff % 60000) / 1000).toString().padStart(2, '0');
+            document.getElementById('uptime').textContent = `${hours}:${minutes}:${seconds}`;
+        }
+
+        // 获取系统状态
+        async function fetchStatus() {
+            try {
+                const response = await fetch('/api/status');
+                const data = await response.json();
+
+                document.getElementById('frame-info').textContent =
+                    `帧: ${data.current_frame}/${data.total_frames}`;
+                document.getElementById('video-status').textContent = '正常';
+                document.getElementById('detection-status').textContent = '运行中';
+                document.getElementById('model-status').textContent = data.usd_loaded ? '已加载' : '未加载';
+            } catch (error) {
+                console.error('获取状态失败:', error);
+            }
+        }
+
+        // 获取检测结果
+        async function fetchDetections() {
+            try {
+                const response = await fetch('/api/detections');
+                const data = await response.json();
+
+                const container = document.getElementById('detections-container');
+                if (data.detections && data.detections.length > 0) {
+                    container.innerHTML = data.detections.map(det =>
+                        `<div class="detection-item">
+                            ${det.class}: ${(det.confidence * 100).toFixed(1)}%<br>
+                            位置: (${det.bbox[0]}, ${det.bbox[1]})
+                        </div>`
+                    ).join('');
+                } else {
+                    container.innerHTML = '<div class="loading">暂无检测结果</div>';
+                }
+
+                // 更新统计
+                document.getElementById('total-detections').textContent = data.total_detections || 0;
+                document.getElementById('cat-count').textContent = data.cat_detections || 0;
+                document.getElementById('detection-rate').textContent =
+                    data.total_frames > 0 ? ((data.total_detections / data.total_frames) * 100).toFixed(1) + '%' : '0%';
+            } catch (error) {
+                console.error('获取检测结果失败:', error);
+            }
+        }
+
+        // 刷新3D可视化
+        function refreshVisualization() {
+            const img = document.getElementById('viz-image');
+            img.src = '/api/3d_visualization?' + new Date().getTime();
+        }
+
+        // 定时更新
+        setInterval(updateUptime, 1000);
+        setInterval(fetchStatus, 5000);
+        setInterval(fetchDetections, 2000);
+        setInterval(refreshVisualization, 10000);
+
+        // 初始加载
+        fetchStatus();
+        fetchDetections();
+    </script>
+</body>
+</html>

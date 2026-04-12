@@ -1,0 +1,552 @@
+{
+  "timestamp": "2026-04-10T12:26:10.018441",
+  "step4_info": {
+    "integration_method": "coordinate_transform",
+    "coordinate_systems": {
+      "calibrated": "4m×3m, left-bottom origin",
+      "usd": "5.0m×5.0m, center origin"
+    }
+  },
+  "integrated_detections": [
+    {
+      "frame_id": 3210,
+      "class_id": 16,
+      "class_name": "dog",
+      "confidence": 0.315,
+      "bbox": {
+        "x1": 612,
+        "y1": 258,
+        "x2": 702,
+        "y2": 350
+      },
+      "center": {
+        "x": 657,
+        "y": 304
+      },
+      "timestamp": 1775794584.2353756,
+      "real_position": {
+        "x": 2.112,
+        "y": 2.359
+      },
+      "position_valid": true,
+      "3d_position": {
+        "calibrated_coords": {
+          "x": 2.112,
+          "y": 2.359,
+          "z": 0.0
+        },
+        "usd_coords": {
+          "x": 0.128,
+          "y": 1.147,
+          "z": 0.0
+        },
+        "room_position": "上方"
+      },
+      "3d_valid": true
+    },
+    {
+      "frame_id": 7500,
+      "class_id": 15,
+      "class_name": "cat",
+      "confidence": 0.432,
+      "bbox": {
+        "x1": 1076,
+        "y1": 405,
+        "x2": 1147,
+        "y2": 478
+      },
+      "center": {
+        "x": 1112,
+        "y": 442
+      },
+      "timestamp": 1775794586.5348036,
+      "real_position": {
+        "x": 3.853,
+        "y": 1.405
+      },
+      "position_valid": true,
+      "3d_position": {
+        "calibrated_coords": {
+          "x": 3.853,
+          "y": 1.405,
+          "z": 0.0
+        },
+        "usd_coords": {
+          "x": 1.879,
+          "y": -0.127,
+          "z": 0.0
+        },
+        "room_position": "右侧"
+      },
+      "3d_valid": true
+    },
+    {
+      "frame_id": 7560,
+      "class_id": 16,
+      "class_name": "dog",
+      "confidence": 0.57,
+      "bbox": {
+        "x1": 1076,
+        "y1": 408,
+        "x2": 1133,
+        "y2": 492
+      },
+      "center": {
+        "x": 1105,
+        "y": 450
+      },
+      "timestamp": 1775794586.5741832,
+      "real_position": {
+        "x": 3.827,
+        "y": 1.349
+      },
+      "position_valid": true,
+      "3d_position": {
+        "calibrated_coords": {
+          "x": 3.827,
+          "y": 1.349,
+          "z": 0.0
+        },
+        "usd_coords": {
+          "x": 1.853,
+          "y": -0.202,
+          "z": 0.0
+        },
+        "room_position": "右侧"
+      },
+      "3d_valid": true
+    },
+    {
+      "frame_id": 7620,
+      "class_id": 16,
+      "class_name": "dog",
+      "confidence": 0.572,
+      "bbox": {
+        "x1": 1058,
+        "y1": 405,
+        "x2": 1188,
+        "y2": 497
+      },
+      "center": {
+        "x": 1123,
+        "y": 451
+      },
+      "timestamp": 1775794586.6131966,
+      "real_position": {
+        "x": 3.894,
+        "y": 1.343
+      },
+      "position_valid": true,
+      "3d_position": {
+        "calibrated_coords": {
+          "x": 3.894,
+          "y": 1.343,
+          "z": 0.0
+        },
+        "usd_coords": {
+          "x": 1.92,
+          "y": -0.21,
+          "z": 0.0
+        },
+        "room_position": "右侧"
+      },
+      "3d_valid": true
+    },
+    {
+      "frame_id": 8130,
+      "class_id": 15,
+      "class_name": "cat",
+      "confidence": 0.403,
+      "bbox": {
+        "x1": 1070,
+        "y1": 389,
+        "x2": 1164,
+        "y2": 493
+      },
+      "center": {
+        "x": 1117,
+        "y": 441
+      },
+      "timestamp": 1775794586.8806746,
+      "real_position": {
+        "x": 3.872,
+        "y": 1.412
+      },
+      "position_valid": true,
+      "3d_position": {
+        "calibrated_coords": {
+          "x": 3.872,
+          "y": 1.412,
+          "z": 0.0
+        },
+        "usd_coords": {
+          "x": 1.898,
+          "y": -0.118,
+          "z": 0.0
+        },
+        "room_position": "右侧"
+      },
+      "3d_valid": true
+    },
+    {
+      "frame_id": 8430,
+      "class_id": 16,
+      "class_name": "dog",
+      "confidence": 0.574,
+      "bbox": {
+        "x1": 1067,
+        "y1": 427,
+        "x2": 1143,
+        "y2": 523
+      },
+      "center": {
+        "x": 1105,
+        "y": 475
+      },
+      "timestamp": 1775794587.0466788,
+      "real_position": {
+        "x": 3.826,
+        "y": 1.177
+      },
+      "position_valid": true,
+      "3d_position": {
+        "calibrated_coords": {
+          "x": 3.826,
+          "y": 1.177,
+          "z": 0.0
+        },
+        "usd_coords": {
+          "x": 1.852,
+          "y": -0.431,
+          "z": 0.0
+        },
+        "room_position": "右侧"
+      },
+      "3d_valid": true
+    },
+    {
+      "frame_id": 8460,
+      "class_id": 16,
+      "class_name": "dog",
+      "confidence": 0.567,
+      "bbox": {
+        "x1": 1061,
+        "y1": 449,
+        "x2": 1186,
+        "y2": 565
+      },
+      "center": {
+        "x": 1124,
+        "y": 507
+      },
+      "timestamp": 1775794587.0695312,
+      "real_position": {
+        "x": 3.895,
+        "y": 0.959
+      },
+      "position_valid": true,
+      "3d_position": {
+        "calibrated_coords": {
+          "x": 3.895,
+          "y": 0.959,
+          "z": 0.0
+        },
+        "usd_coords": {
+          "x": 1.921,
+          "y": -0.723,
+          "z": 0.0
+        },
+        "room_position": "右下角"
+      },
+      "3d_valid": true
+    },
+    {
+      "frame_id": 8520,
+      "class_id": 16,
+      "class_name": "dog",
+      "confidence": 0.376,
+      "bbox": {
+        "x1": 1063,
+        "y1": 494,
+        "x2": 1210,
+        "y2": 716
+      },
+      "center": {
+        "x": 1136,
+        "y": 605
+      },
+      "timestamp": 1775794587.1075547,
+      "real_position": {
+        "x": 3.935,
+        "y": 0.292
+      },
+      "position_valid": true,
+      "3d_position": {
+        "calibrated_coords": {
+          "x": 3.935,
+          "y": 0.292,
+          "z": 0.0
+        },
+        "usd_coords": {
+          "x": 1.961,
+          "y": -1.613,
+          "z": 0.0
+        },
+        "room_position": "右下角"
+      },
+      "3d_valid": true
+    },
+    {
+      "frame_id": 8550,
+      "class_id": 16,
+      "class_name": "dog",
+      "confidence": 0.572,
+      "bbox": {
+        "x1": 1072,
+        "y1": 513,
+        "x2": 1203,
+        "y2": 718
+      },
+      "center": {
+        "x": 1137,
+        "y": 615
+      },
+      "timestamp": 1775794587.1316829,
+      "real_position": {
+        "x": 3.938,
+        "y": 0.225
+      },
+      "position_valid": true,
+      "3d_position": {
+        "calibrated_coords": {
+          "x": 3.938,
+          "y": 0.225,
+          "z": 0.0
+        },
+        "usd_coords": {
+          "x": 1.964,
+          "y": -1.703,
+          "z": 0.0
+        },
+        "room_position": "右下角"
+      },
+      "3d_valid": true
+    },
+    {
+      "frame_id": 8580,
+      "class_id": 16,
+      "class_name": "dog",
+      "confidence": 0.569,
+      "bbox": {
+        "x1": 1072,
+        "y1": 514,
+        "x2": 1206,
+        "y2": 718
+      },
+      "center": {
+        "x": 1139,
+        "y": 616
+      },
+      "timestamp": 1775794587.1570709,
+      "real_position": {
+        "x": 3.946,
+        "y": 0.218
+      },
+      "position_valid": true,
+      "3d_position": {
+        "calibrated_coords": {
+          "x": 3.946,
+          "y": 0.218,
+          "z": 0.0
+        },
+        "usd_coords": {
+          "x": 1.972,
+          "y": -1.712,
+          "z": 0.0
+        },
+        "room_position": "右下角"
+      },
+      "3d_valid": true
+    },
+    {
+      "frame_id": 8610,
+      "class_id": 16,
+      "class_name": "dog",
+      "confidence": 0.386,
+      "bbox": {
+        "x1": 1073,
+        "y1": 515,
+        "x2": 1204,
+        "y2": 718
+      },
+      "center": {
+        "x": 1138,
+        "y": 616
+      },
+      "timestamp": 1775794587.1798728,
+      "real_position": {
+        "x": 3.942,
+        "y": 0.218
+      },
+      "position_valid": true,
+      "3d_position": {
+        "calibrated_coords": {
+          "x": 3.942,
+          "y": 0.218,
+          "z": 0.0
+        },
+        "usd_coords": {
+          "x": 1.968,
+          "y": -1.712,
+          "z": 0.0
+        },
+        "room_position": "右下角"
+      },
+      "3d_valid": true
+    },
+    {
+      "frame_id": 8670,
+      "class_id": 16,
+      "class_name": "dog",
+      "confidence": 0.462,
+      "bbox": {
+        "x1": 1072,
+        "y1": 522,
+        "x2": 1210,
+        "y2": 718
+      },
+      "center": {
+        "x": 1141,
+        "y": 620
+      },
+      "timestamp": 1775794587.2187417,
+      "real_position": {
+        "x": 3.953,
+        "y": 0.191
+      },
+      "position_valid": true,
+      "3d_position": {
+        "calibrated_coords": {
+          "x": 3.953,
+          "y": 0.191,
+          "z": 0.0
+        },
+        "usd_coords": {
+          "x": 1.979,
+          "y": -1.748,
+          "z": 0.0
+        },
+        "room_position": "右下角"
+      },
+      "3d_valid": true
+    },
+    {
+      "frame_id": 9930,
+      "class_id": 15,
+      "class_name": "cat",
+      "confidence": 0.447,
+      "bbox": {
+        "x1": 1035,
+        "y1": 430,
+        "x2": 1144,
+        "y2": 589
+      },
+      "center": {
+        "x": 1090,
+        "y": 510
+      },
+      "timestamp": 1775794587.9100387,
+      "real_position": {
+        "x": 3.768,
+        "y": 0.937
+      },
+      "position_valid": true,
+      "3d_position": {
+        "calibrated_coords": {
+          "x": 3.768,
+          "y": 0.937,
+          "z": 0.0
+        },
+        "usd_coords": {
+          "x": 1.793,
+          "y": -0.752,
+          "z": 0.0
+        },
+        "room_position": "右下角"
+      },
+      "3d_valid": true
+    },
+    {
+      "frame_id": 9930,
+      "class_id": 16,
+      "class_name": "dog",
+      "confidence": 0.374,
+      "bbox": {
+        "x1": 1032,
+        "y1": 430,
+        "x2": 1144,
+        "y2": 589
+      },
+      "center": {
+        "x": 1088,
+        "y": 509
+      },
+      "timestamp": 1775794587.9100642,
+      "real_position": {
+        "x": 3.76,
+        "y": 0.943
+      },
+      "position_valid": true,
+      "3d_position": {
+        "calibrated_coords": {
+          "x": 3.76,
+          "y": 0.943,
+          "z": 0.0
+        },
+        "usd_coords": {
+          "x": 1.785,
+          "y": -0.744,
+          "z": 0.0
+        },
+        "room_position": "右下角"
+      },
+      "3d_valid": true
+    },
+    {
+      "frame_id": 9960,
+      "class_id": 16,
+      "class_name": "dog",
+      "confidence": 0.415,
+      "bbox": {
+        "x1": 980,
+        "y1": 391,
+        "x2": 1115,
+        "y2": 535
+      },
+      "center": {
+        "x": 1048,
+        "y": 463
+      },
+      "timestamp": 1775794587.9335887,
+      "real_position": {
+        "x": 3.611,
+        "y": 1.258
+      },
+      "position_valid": true,
+      "3d_position": {
+        "calibrated_coords": {
+          "x": 3.611,
+          "y": 1.258,
+          "z": 0.0
+        },
+        "usd_coords": {
+          "x": 1.635,
+          "y": -0.323,
+          "z": 0.0
+        },
+        "room_position": "右侧"
+      },
+      "3d_valid": true
+    }
+  ]
+}

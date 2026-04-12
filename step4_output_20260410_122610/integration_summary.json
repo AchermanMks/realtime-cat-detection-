@@ -1,0 +1,26 @@
+{
+  "integration_summary": {
+    "total_detections": 15,
+    "valid_3d_localizations": 15,
+    "3d_success_rate": 100.0
+  },
+  "pet_statistics": {
+    "cat_detections": 3,
+    "dog_detections": 12,
+    "total_pets": 15
+  },
+  "spatial_distribution": {
+    "上方": 1,
+    "右侧": 6,
+    "右下角": 8
+  },
+  "temporal_analysis": {
+    "frame_span": 6750,
+    "first_detection_frame": 3210,
+    "last_detection_frame": 9960
+  },
+  "coordinate_systems": {
+    "calibrated_range": "0-4m × 0-3m",
+    "usd_range": "-2.50-2.53m × -2.50-2.50m"
+  }
+}

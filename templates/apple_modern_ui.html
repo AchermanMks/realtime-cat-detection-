@@ -1,0 +1,1006 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Pet Intelligence · AI监控系统</title>
+    <style>
+        /* 苹果设计语言基础 */
+        :root {
+            --apple-blue: #007AFF;
+            --apple-green: #34C759;
+            --apple-orange: #FF9500;
+            --apple-red: #FF3B30;
+            --apple-purple: #AF52DE;
+            --apple-pink: #FF2D92;
+            --apple-yellow: #FFCC00;
+            --apple-gray: #8E8E93;
+            --apple-gray2: #AEAEB2;
+            --apple-gray3: #C7C7CC;
+            --apple-gray4: #D1D1D6;
+            --apple-gray5: #E5E5EA;
+            --apple-gray6: #F2F2F7;
+
+            --background-primary: #000000;
+            --background-secondary: #1C1C1E;
+            --background-tertiary: #2C2C2E;
+            --label-primary: rgba(255, 255, 255, 0.87);
+            --label-secondary: rgba(255, 255, 255, 0.60);
+            --label-tertiary: rgba(255, 255, 255, 0.38);
+            --separator: rgba(255, 255, 255, 0.08);
+            --fill-primary: rgba(120, 120, 128, 0.36);
+            --fill-secondary: rgba(120, 120, 128, 0.32);
+            --fill-tertiary: rgba(120, 120, 128, 0.24);
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            background: var(--background-primary);
+            background-image:
+                radial-gradient(circle at 20% 20%, rgba(0, 122, 255, 0.03) 0%, transparent 50%),
+                radial-gradient(circle at 80% 80%, rgba(52, 199, 89, 0.03) 0%, transparent 50%),
+                radial-gradient(circle at 40% 60%, rgba(175, 82, 222, 0.02) 0%, transparent 50%);
+            color: var(--label-primary);
+            font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'SF Pro Text', system-ui, sans-serif;
+            font-feature-settings: 'kern' 1;
+            text-rendering: optimizeLegibility;
+            -webkit-font-smoothing: antialiased;
+            -moz-osx-font-smoothing: grayscale;
+            line-height: 1.47059;
+            letter-spacing: -0.022em;
+            min-height: 100vh;
+            overflow-x: hidden;
+        }
+
+        /* 科技网格背景 */
+        body::before {
+            content: '';
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-image:
+                linear-gradient(rgba(255, 255, 255, 0.008) 1px, transparent 1px),
+                linear-gradient(90deg, rgba(255, 255, 255, 0.008) 1px, transparent 1px);
+            background-size: 32px 32px;
+            z-index: -1;
+            pointer-events: none;
+            opacity: 0.5;
+        }
+
+        /* 顶部导航栏 */
+        .nav-bar {
+            position: sticky;
+            top: 0;
+            z-index: 1000;
+            background: rgba(28, 28, 30, 0.8);
+            backdrop-filter: blur(20px) saturate(180%);
+            -webkit-backdrop-filter: blur(20px) saturate(180%);
+            border-bottom: 0.5px solid var(--separator);
+            padding: 12px 0;
+        }
+
+        .nav-container {
+            max-width: 1024px;
+            margin: 0 auto;
+            padding: 0 32px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+
+        .nav-title {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            font-size: 22px;
+            font-weight: 600;
+            letter-spacing: -0.026em;
+        }
+
+        .nav-badge {
+            background: var(--apple-blue);
+            color: white;
+            font-size: 11px;
+            font-weight: 600;
+            padding: 2px 6px;
+            border-radius: 4px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .nav-controls {
+            display: flex;
+            gap: 12px;
+            align-items: center;
+        }
+
+        /* 苹果按钮系统 */
+        .btn {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 8px 16px;
+            border-radius: 8px;
+            border: none;
+            font-family: inherit;
+            font-size: 14px;
+            font-weight: 510;
+            letter-spacing: -0.008em;
+            text-decoration: none;
+            cursor: pointer;
+            transition: all 0.2s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+            position: relative;
+            overflow: hidden;
+        }
+
+        .btn-primary {
+            background: var(--apple-blue);
+            color: white;
+        }
+
+        .btn-primary:hover {
+            background: #0056D3;
+            transform: translateY(-0.5px);
+            box-shadow: 0 4px 16px rgba(0, 122, 255, 0.3);
+        }
+
+        .btn-secondary {
+            background: var(--fill-secondary);
+            color: var(--label-primary);
+            border: 0.5px solid var(--separator);
+        }
+
+        .btn-secondary:hover {
+            background: var(--fill-primary);
+            transform: translateY(-0.5px);
+        }
+
+        /* 状态指示器 */
+        .status-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: var(--apple-green);
+            animation: pulse 2s infinite;
+            box-shadow: 0 0 0 0 rgba(52, 199, 89, 0.7);
+        }
+
+        @keyframes pulse {
+            0% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(52, 199, 89, 0.7); }
+            70% { transform: scale(1); box-shadow: 0 0 0 6px rgba(52, 199, 89, 0); }
+            100% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(52, 199, 89, 0); }
+        }
+
+        /* 主内容容器 */
+        .main-content {
+            max-width: 1024px;
+            margin: 0 auto;
+            padding: 32px;
+            display: grid;
+            grid-template-columns: 1fr 360px;
+            gap: 32px;
+            min-height: calc(100vh - 120px);
+        }
+
+        /* 左侧主要区域 */
+        .primary-section {
+            display: flex;
+            flex-direction: column;
+            gap: 24px;
+        }
+
+        /* 视频卡片 */
+        .video-card {
+            background: var(--background-secondary);
+            backdrop-filter: blur(40px) saturate(180%);
+            -webkit-backdrop-filter: blur(40px) saturate(180%);
+            border: 0.5px solid var(--separator);
+            border-radius: 16px;
+            overflow: hidden;
+            position: relative;
+            transition: all 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+        }
+
+        .video-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 16px 40px rgba(0, 0, 0, 0.15);
+            border-color: rgba(255, 255, 255, 0.1);
+        }
+
+        .video-header {
+            padding: 20px 24px 16px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-bottom: 0.5px solid var(--separator);
+        }
+
+        .video-title {
+            font-size: 20px;
+            font-weight: 600;
+            letter-spacing: -0.024em;
+        }
+
+        .live-indicator {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            background: rgba(255, 59, 48, 0.1);
+            color: var(--apple-red);
+            padding: 6px 12px;
+            border-radius: 8px;
+            font-size: 12px;
+            font-weight: 600;
+            border: 0.5px solid rgba(255, 59, 48, 0.2);
+        }
+
+        .video-container {
+            aspect-ratio: 16/9;
+            background: #000;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .video-stream {
+            width: 100%;
+            height: 100%;
+            object-fit: contain;
+        }
+
+        .video-overlay {
+            position: absolute;
+            bottom: 16px;
+            left: 16px;
+            right: 16px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .video-controls {
+            display: flex;
+            gap: 8px;
+        }
+
+        .video-info {
+            background: rgba(0, 0, 0, 0.5);
+            backdrop-filter: blur(10px);
+            color: white;
+            padding: 6px 12px;
+            border-radius: 8px;
+            font-size: 12px;
+            font-weight: 500;
+        }
+
+        /* 检测分析区域 */
+        .analysis-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+        }
+
+        .analysis-card {
+            background: var(--background-secondary);
+            border: 0.5px solid var(--separator);
+            border-radius: 16px;
+            padding: 24px;
+            position: relative;
+            transition: all 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+        }
+
+        .analysis-card:hover {
+            transform: translateY(-1px);
+            border-color: rgba(255, 255, 255, 0.1);
+            box-shadow: 0 8px 20px rgba(0, 0, 0, 0.1);
+        }
+
+        .analysis-card::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 3px;
+            border-radius: 16px 16px 0 0;
+        }
+
+        .detection-card::before {
+            background: linear-gradient(90deg, var(--apple-orange), var(--apple-red));
+        }
+
+        .intelligence-card::before {
+            background: linear-gradient(90deg, var(--apple-purple), var(--apple-pink));
+        }
+
+        .card-header {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            margin-bottom: 20px;
+        }
+
+        .card-icon {
+            width: 32px;
+            height: 32px;
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 16px;
+            font-weight: 600;
+        }
+
+        .detection-icon {
+            background: linear-gradient(135deg, var(--apple-orange), var(--apple-red));
+            color: white;
+        }
+
+        .intelligence-icon {
+            background: linear-gradient(135deg, var(--apple-purple), var(--apple-pink));
+            color: white;
+        }
+
+        .card-title {
+            font-size: 17px;
+            font-weight: 600;
+            letter-spacing: -0.022em;
+        }
+
+        .card-subtitle {
+            font-size: 13px;
+            color: var(--label-secondary);
+            margin-top: 2px;
+        }
+
+        /* 统计网格 */
+        .stats-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 12px;
+            margin-top: 16px;
+        }
+
+        .stat-item {
+            background: var(--fill-tertiary);
+            border: 0.5px solid var(--separator);
+            border-radius: 12px;
+            padding: 16px 12px;
+            text-align: center;
+            transition: all 0.2s ease;
+        }
+
+        .stat-item:hover {
+            background: var(--fill-secondary);
+            transform: translateY(-1px);
+        }
+
+        .stat-value {
+            font-size: 24px;
+            font-weight: 700;
+            letter-spacing: -0.04em;
+            margin-bottom: 4px;
+        }
+
+        .stat-label {
+            font-size: 11px;
+            color: var(--label-secondary);
+            font-weight: 500;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        /* 右侧边栏 */
+        .sidebar {
+            display: flex;
+            flex-direction: column;
+            gap: 24px;
+        }
+
+        .sidebar-card {
+            background: var(--background-secondary);
+            border: 0.5px solid var(--separator);
+            border-radius: 16px;
+            overflow: hidden;
+            transition: all 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+        }
+
+        .sidebar-card:hover {
+            transform: translateY(-1px);
+            border-color: rgba(255, 255, 255, 0.1);
+            box-shadow: 0 8px 20px rgba(0, 0, 0, 0.1);
+        }
+
+        .sidebar-header {
+            padding: 20px 24px 16px;
+            border-bottom: 0.5px solid var(--separator);
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .sidebar-icon {
+            width: 28px;
+            height: 28px;
+            border-radius: 6px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 14px;
+            background: linear-gradient(135deg, var(--apple-green), var(--apple-blue));
+            color: white;
+        }
+
+        .sidebar-title {
+            font-size: 16px;
+            font-weight: 600;
+            letter-spacing: -0.020em;
+        }
+
+        .sidebar-content {
+            padding: 20px 24px;
+        }
+
+        /* 3D可视化 */
+        .visualization-container {
+            width: 100%;
+            height: 300px;
+            background: #000;
+            border-radius: 12px;
+            border: 0.5px solid var(--separator);
+            overflow: hidden;
+            position: relative;
+            margin-top: 16px;
+        }
+
+        .viz-image {
+            width: 100%;
+            height: 100%;
+            object-fit: contain;
+        }
+
+        .viz-placeholder {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            text-align: center;
+            color: var(--label-tertiary);
+        }
+
+        /* 坐标信息 */
+        .coordinates-list {
+            list-style: none;
+            margin-top: 12px;
+        }
+
+        .coordinates-list li {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 8px 0;
+            border-bottom: 0.5px solid var(--separator);
+            font-size: 14px;
+        }
+
+        .coordinates-list li:last-child {
+            border-bottom: none;
+        }
+
+        .coord-label {
+            color: var(--label-secondary);
+        }
+
+        .coord-value {
+            font-weight: 600;
+            font-family: 'SF Mono', 'Monaco', monospace;
+            color: var(--apple-green);
+        }
+
+        /* 检测摘要 */
+        .detection-summary {
+            margin-top: 12px;
+            padding: 16px;
+            background: var(--fill-tertiary);
+            border-radius: 12px;
+            text-align: center;
+        }
+
+        .detection-status {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 12px;
+        }
+
+        .detection-icon-large {
+            font-size: 32px;
+            margin-bottom: 8px;
+        }
+
+        .detection-message {
+            font-size: 16px;
+            font-weight: 600;
+            margin-bottom: 8px;
+        }
+
+        .detection-details {
+            font-size: 13px;
+            color: var(--label-secondary);
+            line-height: 1.4;
+        }
+
+        .detection-active {
+            background: rgba(52, 199, 89, 0.1);
+            border: 0.5px solid var(--apple-green);
+        }
+
+        .detection-inactive {
+            background: var(--fill-tertiary);
+            border: 0.5px solid var(--separator);
+        }
+
+        .pulse-icon {
+            animation: pulse-scale 2s infinite;
+        }
+
+        @keyframes pulse-scale {
+            0%, 100% {
+                transform: scale(1);
+            }
+            50% {
+                transform: scale(1.1);
+            }
+        }
+
+        /* 响应式设计 */
+        @media (max-width: 1200px) {
+            .main-content {
+                grid-template-columns: 1fr;
+                max-width: 800px;
+                gap: 24px;
+            }
+
+            .sidebar {
+                order: -1;
+            }
+
+            .analysis-grid {
+                grid-template-columns: 1fr;
+                gap: 16px;
+            }
+
+            .nav-container {
+                padding: 0 24px;
+            }
+
+            .main-content {
+                padding: 24px;
+            }
+        }
+
+        @media (max-width: 768px) {
+            .nav-container {
+                padding: 0 16px;
+            }
+
+            .nav-title {
+                font-size: 18px;
+            }
+
+            .main-content {
+                padding: 16px;
+                gap: 20px;
+            }
+
+            .video-header {
+                padding: 16px 20px 12px;
+            }
+
+            .analysis-card,
+            .sidebar-card {
+                padding: 20px;
+            }
+
+            .sidebar-content {
+                padding: 16px 20px;
+            }
+        }
+
+        /* 加载动画 */
+        .loading {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            color: var(--label-secondary);
+            font-size: 14px;
+        }
+
+        .loading::before {
+            content: '';
+            width: 16px;
+            height: 16px;
+            border: 2px solid var(--separator);
+            border-top: 2px solid var(--apple-blue);
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        /* 毛玻璃遮罩 */
+        .glass-effect {
+            backdrop-filter: blur(20px) saturate(180%);
+            -webkit-backdrop-filter: blur(20px) saturate(180%);
+        }
+
+        /* 苹果滚动条 */
+        ::-webkit-scrollbar {
+            width: 8px;
+        }
+
+        ::-webkit-scrollbar-track {
+            background: transparent;
+        }
+
+        ::-webkit-scrollbar-thumb {
+            background: var(--fill-secondary);
+            border-radius: 4px;
+        }
+
+        ::-webkit-scrollbar-thumb:hover {
+            background: var(--fill-primary);
+        }
+    </style>
+</head>
+<body>
+    <!-- 顶部导航栏 -->
+    <nav class="nav-bar">
+        <div class="nav-container">
+            <div class="nav-title">
+                <span>🐾</span>
+                <span>Pet Intelligence</span>
+                <span class="nav-badge">AI</span>
+            </div>
+            <div class="nav-controls">
+                <div class="status-dot"></div>
+                <span style="font-size: 13px; color: var(--label-secondary);">系统运行中</span>
+                <button class="btn btn-secondary">
+                    <span>⚙️</span>
+                    <span>设置</span>
+                </button>
+            </div>
+        </div>
+    </nav>
+
+    <!-- 主内容区域 -->
+    <main class="main-content">
+        <!-- 左侧主要区域 -->
+        <div class="primary-section">
+            <!-- 视频监控卡片 -->
+            <div class="video-card">
+                <div class="video-header">
+                    <div class="video-title">实时视频监控</div>
+                    <div class="live-indicator">
+                        <div class="status-dot" style="width: 6px; height: 6px; animation: none;"></div>
+                        <span>LIVE</span>
+                    </div>
+                </div>
+                <div class="video-container">
+                    <img class="video-stream" src="{{ url_for('video_feed') }}" alt="监控画面" />
+                    <div class="video-overlay">
+                        <div class="video-controls">
+                            <div class="video-info">🎥 HD 1080p</div>
+                        </div>
+                        <div class="video-info" id="frame-info">帧: 0/0</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 检测与分析区域 -->
+            <div class="analysis-grid">
+                <!-- 宠物检测卡片 -->
+                <div class="analysis-card detection-card">
+                    <div class="card-header">
+                        <div class="card-icon detection-icon">🎯</div>
+                        <div>
+                            <div class="card-title">智能检测</div>
+                            <div class="card-subtitle">Enhanced Pet Detection</div>
+                        </div>
+                    </div>
+
+                    <div class="detection-summary" id="detection-summary">
+                        <div class="loading">初始化增强猫检测模型</div>
+                    </div>
+
+                    <div class="stats-grid">
+                        <div class="stat-item">
+                            <div class="stat-value" id="total-detections">0</div>
+                            <div class="stat-label">总检测</div>
+                        </div>
+                        <div class="stat-item">
+                            <div class="stat-value" id="cat-detections">0</div>
+                            <div class="stat-label">猫检测</div>
+                        </div>
+                        <div class="stat-item">
+                            <div class="stat-value" id="detection-rate">0%</div>
+                            <div class="stat-label">准确率</div>
+                        </div>
+                        <div class="stat-item">
+                            <div class="stat-value" id="avg-confidence">0%</div>
+                            <div class="stat-label">置信度</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- VLM智能分析卡片 -->
+                <div class="analysis-card intelligence-card">
+                    <div class="card-header">
+                        <div class="card-icon intelligence-icon">🧠</div>
+                        <div>
+                            <div class="card-title">智能分析</div>
+                            <div class="card-subtitle">VLM Analysis</div>
+                        </div>
+                    </div>
+
+                    <div id="vlm-analysis">
+                        <div class="loading">加载分析模型</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 右侧边栏 -->
+        <aside class="sidebar">
+            <!-- 3D空间定位 -->
+            <div class="sidebar-card">
+                <div class="sidebar-header">
+                    <div class="sidebar-icon">🏠</div>
+                    <div>
+                        <div class="sidebar-title">3D空间定位</div>
+                    </div>
+                </div>
+                <div class="sidebar-content">
+                    <div id="localization-info">
+                        <ul class="coordinates-list">
+                            <li>
+                                <span class="coord-label">X轴位置</span>
+                                <span class="coord-value" id="coord-x">0.00m</span>
+                            </li>
+                            <li>
+                                <span class="coord-label">Y轴位置</span>
+                                <span class="coord-value" id="coord-y">0.00m</span>
+                            </li>
+                            <li>
+                                <span class="coord-label">Z轴位置</span>
+                                <span class="coord-value" id="coord-z">0.00m</span>
+                            </li>
+                        </ul>
+                    </div>
+
+                    <div class="visualization-container">
+                        <img id="3d-visualization" class="viz-image" src="/api/3d_visualization" alt="3D可视化" />
+                        <div class="viz-placeholder">
+                            <div>🔄</div>
+                            <div>加载3D模型</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 系统状态 -->
+            <div class="sidebar-card">
+                <div class="sidebar-header">
+                    <div class="sidebar-icon">📊</div>
+                    <div>
+                        <div class="sidebar-title">系统状态</div>
+                    </div>
+                </div>
+                <div class="sidebar-content">
+                    <ul class="coordinates-list">
+                        <li>
+                            <span class="coord-label">检测模型</span>
+                            <span class="coord-value">✅ 运行中</span>
+                        </li>
+                        <li>
+                            <span class="coord-label">VLM分析</span>
+                            <span class="coord-value">⚠️ 待加载</span>
+                        </li>
+                        <li>
+                            <span class="coord-label">3D定位</span>
+                            <span class="coord-value">✅ 已就绪</span>
+                        </li>
+                        <li>
+                            <span class="coord-label">运行时间</span>
+                            <span class="coord-value" id="uptime">00:00:00</span>
+                        </li>
+                    </ul>
+                </div>
+            </div>
+        </aside>
+    </main>
+
+    <script>
+        let startTime = new Date();
+
+        // 运行时间计算
+        function updateUptime() {
+            const now = new Date();
+            const diff = now - startTime;
+            const hours = Math.floor(diff / 3600000).toString().padStart(2, '0');
+            const minutes = Math.floor((diff % 3600000) / 60000).toString().padStart(2, '0');
+            const seconds = Math.floor((diff % 60000) / 1000).toString().padStart(2, '0');
+            document.getElementById('uptime').textContent = `${hours}:${minutes}:${seconds}`;
+        }
+
+        // 获取系统状态
+        async function fetchStatus() {
+            try {
+                const response = await fetch('/api/status');
+                const data = await response.json();
+                document.getElementById('frame-info').textContent =
+                    `帧: ${data.current_frame || 0}/${data.total_frames || 0}`;
+            } catch (error) {
+                console.error('获取状态失败:', error);
+            }
+        }
+
+        // 获取检测结果
+        async function fetchDetections() {
+            try {
+                const response = await fetch('/api/detections');
+                const data = await response.json();
+
+                const container = document.getElementById('detection-summary');
+
+                if (data.detections && data.detections.length > 0) {
+                    const catCount = data.detections.filter(d => d.class === '猫').length;
+                    const dogCount = data.detections.filter(d => d.class === '狗').length;
+                    const avgConfidence = data.average_confidence * 100;
+
+                    let statusClass = 'detection-active';
+                    let message = '检测活跃';
+                    let details = `发现 ${catCount} 只猫, ${dogCount} 只狗`;
+                    let icon = '🎯';
+
+                    if (catCount > 0) {
+                        statusClass = 'detection-active';
+                        message = '猫咪检测成功!';
+                        details = `置信度 ${avgConfidence.toFixed(1)}% | ${data.detections.length} 个目标`;
+                        icon = '🐱';
+                    }
+
+                    container.innerHTML = `
+                        <div class="detection-summary ${statusClass}">
+                            <div class="detection-icon-large pulse-icon">${icon}</div>
+                            <div class="detection-message">${message}</div>
+                            <div class="detection-details">${details}</div>
+                        </div>
+                    `;
+
+                    // 更新坐标信息
+                    if (data.detections[0].physical_coords) {
+                        const coords = data.detections[0].physical_coords;
+                        document.getElementById('coord-x').textContent = `${coords.x.toFixed(2)}m`;
+                        document.getElementById('coord-y').textContent = `${coords.y.toFixed(2)}m`;
+                        document.getElementById('coord-z').textContent = `${coords.z.toFixed(2)}m`;
+                    }
+                } else {
+                    container.innerHTML = `
+                        <div class="detection-summary detection-inactive">
+                            <div class="detection-icon-large">👀</div>
+                            <div class="detection-message">监控中</div>
+                            <div class="detection-details">等待宠物出现...</div>
+                        </div>
+                    `;
+                }
+
+                // 更新统计
+                document.getElementById('total-detections').textContent = data.total_detections || 0;
+                document.getElementById('cat-detections').textContent = data.cat_detections || 0;
+                document.getElementById('detection-rate').textContent =
+                    data.total_frames > 0 ? `${((data.cat_detections / data.total_frames) * 100).toFixed(1)}%` : '0%';
+                document.getElementById('avg-confidence').textContent =
+                    data.average_confidence ? `${(data.average_confidence * 100).toFixed(1)}%` : '0%';
+
+            } catch (error) {
+                console.error('获取检测结果失败:', error);
+                const container = document.getElementById('detection-summary');
+                container.innerHTML = '<div class="loading">检测服务连接失败</div>';
+            }
+        }
+
+        // 获取VLM分析结果
+        async function fetchVLMAnalysis() {
+            try {
+                const response = await fetch('/api/vlm_analysis');
+                const data = await response.json();
+
+                const container = document.getElementById('vlm-analysis');
+                if (data.analysis) {
+                    container.innerHTML = `
+                        <div style="margin-bottom: 16px;">
+                            <div style="font-weight: 600; margin-bottom: 8px; color: var(--label-primary);">场景分析</div>
+                            <div style="color: var(--label-secondary); line-height: 1.5;">${data.analysis.scene || '分析中...'}</div>
+                        </div>
+                        <div>
+                            <div style="font-weight: 600; margin-bottom: 8px; color: var(--label-primary);">行为识别</div>
+                            <div style="color: var(--label-secondary); line-height: 1.5;">${data.analysis.behavior || '分析中...'}</div>
+                        </div>
+                    `;
+                }
+            } catch (error) {
+                console.error('获取VLM分析失败:', error);
+            }
+        }
+
+        // 刷新3D可视化
+        function refresh3DVisualization() {
+            const img = document.getElementById('3d-visualization');
+            const placeholder = document.querySelector('.viz-placeholder');
+
+            img.onload = () => {
+                if (placeholder) placeholder.style.display = 'none';
+            };
+
+            img.onerror = () => {
+                if (placeholder) placeholder.style.display = 'flex';
+            };
+
+            img.src = `/api/3d_visualization?${new Date().getTime()}`;
+        }
+
+        // 定时更新
+        setInterval(updateUptime, 1000);
+        setInterval(fetchStatus, 3000);
+        setInterval(fetchDetections, 2000);
+        setInterval(fetchVLMAnalysis, 5000);
+        setInterval(refresh3DVisualization, 8000);
+
+        // 初始加载
+        updateUptime();
+        fetchStatus();
+        fetchDetections();
+        fetchVLMAnalysis();
+        refresh3DVisualization();
+
+        // 苹果式交互增强
+        document.addEventListener('DOMContentLoaded', function() {
+            // 为所有按钮添加触觉反馈效果
+            document.querySelectorAll('.btn').forEach(btn => {
+                btn.addEventListener('mousedown', function() {
+                    this.style.transform = 'scale(0.96)';
+                });
+
+                btn.addEventListener('mouseup', function() {
+                    this.style.transform = '';
+                });
+
+                btn.addEventListener('mouseleave', function() {
+                    this.style.transform = '';
+                });
+            });
+
+            // 卡片悬浮效果
+            document.querySelectorAll('.video-card, .analysis-card, .sidebar-card').forEach(card => {
+                card.addEventListener('mouseenter', function() {
+                    this.style.transform = 'translateY(-2px)';
+                });
+
+                card.addEventListener('mouseleave', function() {
+                    this.style.transform = '';
+                });
+            });
+        });
+    </script>
+</body>
+</html>

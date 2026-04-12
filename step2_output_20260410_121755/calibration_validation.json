@@ -1,0 +1,113 @@
+{
+  "validation_summary": {
+    "total_points": 6,
+    "mean_error_meters": 0.0705,
+    "max_error_meters": 0.2031,
+    "std_error_meters": 0.0691,
+    "accuracy_assessment": "good"
+  },
+  "error_details": [
+    {
+      "point_id": 0,
+      "description": "左下角原点",
+      "pixel": [
+        128,
+        648
+      ],
+      "expected_real": [
+        0.0,
+        0.0
+      ],
+      "computed_real": [
+        0.074,
+        -0.08
+      ],
+      "error_meters": 0.1086
+    },
+    {
+      "point_id": 1,
+      "description": "右下角 - 4米宽",
+      "pixel": [
+        1152,
+        648
+      ],
+      "expected_real": [
+        4.0,
+        0.0
+      ],
+      "computed_real": [
+        3.992,
+        0.003
+      ],
+      "error_meters": 0.0082
+    },
+    {
+      "point_id": 2,
+      "description": "右上角 - 4x3米",
+      "pixel": [
+        1152,
+        216
+      ],
+      "expected_real": [
+        4.0,
+        3.0
+      ],
+      "computed_real": [
+        4.016,
+        2.981
+      ],
+      "error_meters": 0.0247
+    },
+    {
+      "point_id": 3,
+      "description": "左上角 - 3米深",
+      "pixel": [
+        128,
+        216
+      ],
+      "expected_real": [
+        0.0,
+        3.0
+      ],
+      "computed_real": [
+        0.004,
+        2.991
+      ],
+      "error_meters": 0.0104
+    },
+    {
+      "point_id": 4,
+      "description": "房间中心点",
+      "pixel": [
+        640,
+        432
+      ],
+      "expected_real": [
+        2.0,
+        1.5
+      ],
+      "computed_real": [
+        2.052,
+        1.457
+      ],
+      "error_meters": 0.068
+    },
+    {
+      "point_id": 5,
+      "description": "左中辅助点",
+      "pixel": [
+        384,
+        503
+      ],
+      "expected_real": [
+        1.2,
+        0.8
+      ],
+      "computed_real": [
+        1.061,
+        0.948
+      ],
+      "error_meters": 0.2031
+    }
+  ]
+}

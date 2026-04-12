@@ -1,0 +1,191 @@
+{
+  "spatial_statistics": {
+    "cat": {
+      "total_points": 3,
+      "x_range": {
+        "min": 1.793,
+        "max": 1.898
+      },
+      "y_range": {
+        "min": -0.752,
+        "max": -0.118
+      },
+      "center_of_activity": {
+        "x": 1.8566666666666667,
+        "y": -0.3323333333333333
+      },
+      "spread": {
+        "x_std": 0.04568247901426639,
+        "y_std": 0.29677189145125515
+      },
+      "coverage_area": 0.06656999999999999
+    },
+    "dog": {
+      "total_points": 12,
+      "x_range": {
+        "min": 0.128,
+        "max": 1.979
+      },
+      "y_range": {
+        "min": -1.748,
+        "max": 1.147
+      },
+      "center_of_activity": {
+        "x": 1.7448333333333335,
+        "y": -0.8311666666666665
+      },
+      "spread": {
+        "x_std": 0.49696861626822636,
+        "y_std": 0.8610159535236397
+      },
+      "coverage_area": 5.358645
+    },
+    "all": {
+      "total_points": 15,
+      "x_range": {
+        "min": 0.128,
+        "max": 1.979
+      },
+      "y_range": {
+        "min": -1.748,
+        "max": 1.147
+      },
+      "center_of_activity": {
+        "x": 1.7671999999999999,
+        "y": -0.7314
+      },
+      "spread": {
+        "x_std": 0.44721437066951825,
+        "y_std": 0.8065401663897466
+      },
+      "coverage_area": 5.358645
+    }
+  },
+  "temporal_patterns": {
+    "cat": {
+      "frame_span": 2430,
+      "total_frames": 3,
+      "first_frame": 7500,
+      "last_frame": 9930,
+      "activity_duration": 1.3752350807189941,
+      "detection_frequency": 1.0
+    },
+    "dog": {
+      "frame_span": 6750,
+      "total_frames": 12,
+      "first_frame": 3210,
+      "last_frame": 9960,
+      "activity_duration": 3.6982131004333496,
+      "detection_frequency": 1.0
+    },
+    "all": {
+      "frame_span": 6750,
+      "total_frames": 14,
+      "first_frame": 3210,
+      "last_frame": 9960,
+      "activity_duration": 3.6982131004333496,
+      "detection_frequency": 1.0714285714285714
+    }
+  },
+  "movement_metrics": {
+    "cat": {
+      "total_distance": 0.6636597738704457,
+      "average_distance_per_move": 0.33182988693522286,
+      "average_speed": 0.34254446769417024,
+      "max_speed": 0.6243038514608614,
+      "max_displacement": 0.6308890552228656,
+      "movement_efficiency": 0.9506212069228452
+    },
+    "dog": {
+      "total_distance": 5.292716961254436,
+      "average_distance_per_move": 0.48115608738676685,
+      "average_speed": 5.962430976740495,
+      "max_speed": 23.430222965212657,
+      "max_displacement": 2.105219465993985,
+      "movement_efficiency": 0.3977578021657564
+    },
+    "all": {
+      "total_distance": 5.529369435607836,
+      "average_distance_per_move": 0.394954959686274,
+      "average_speed": 36.629116123938886,
+      "max_speed": 443.48722254323195,
+      "max_displacement": 2.105219465993985,
+      "movement_efficiency": 0.3807340946395927
+    }
+  },
+  "activity_zones": {
+    "cat": [
+      {
+        "zone_id": 0,
+        "center": {
+          "x": 1.8566666666666667,
+          "y": -0.3323333333333333
+        },
+        "point_count": 3,
+        "radius": 0.28309843735163226,
+        "density": 1.0
+      }
+    ],
+    "dog": [
+      {
+        "zone_id": 0,
+        "center": {
+          "x": 1.7448333333333335,
+          "y": -0.8311666666666667
+        },
+        "point_count": 12,
+        "radius": 0.7958520553353422,
+        "density": 1.0
+      }
+    ],
+    "all": [
+      {
+        "zone_id": 0,
+        "center": {
+          "x": 1.7671999999999999,
+          "y": -0.7314
+        },
+        "point_count": 15,
+        "radius": 0.7133276872090136,
+        "density": 1.0
+      }
+    ]
+  },
+  "behavioral_insights": {
+    "cat": {
+      "preferred_positions": {
+        "右侧": 2,
+        "右下角": 1
+      },
+      "most_preferred_area": "右侧",
+      "activity_intensity": 1.0,
+      "average_detection_confidence": 0.42733333333333334,
+      "position_diversity": 2,
+      "consistency_score": 0.6666666666666666
+    },
+    "dog": {
+      "preferred_positions": {
+        "右下角": 7,
+        "右侧": 4,
+        "上方": 1
+      },
+      "most_preferred_area": "右下角",
+      "activity_intensity": 1.0,
+      "average_detection_confidence": 0.47933333333333333,
+      "position_diversity": 3,
+      "consistency_score": 0.5833333333333334
+    },
+    "all": {
+      "preferred_positions": {
+        "右下角": 8,
+        "右侧": 6,
+        "上方": 1
+      },
+      "most_preferred_area": "右下角",
+      "activity_intensity": 1.0714285714285714,
+      "average_detection_confidence": 0.46893333333333326,
+      "position_diversity": 3,
+      "consistency_score": 0.5333333333333333
+    }
+  }
+}

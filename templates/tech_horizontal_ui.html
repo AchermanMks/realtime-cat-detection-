@@ -1,0 +1,924 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Pet Intelligence · 智能监控系统</title>
+    <style>
+        /* 苹果设计语言 + 科技感配色 */
+        :root {
+            --primary-blue: #0A84FF;
+            --primary-green: #32D74B;
+            --primary-orange: #FF9F0A;
+            --primary-red: #FF453A;
+            --primary-purple: #BF5AF2;
+            --primary-pink: #FF375F;
+
+            --bg-primary: #000000;
+            --bg-secondary: #1C1C1E;
+            --bg-tertiary: #2C2C2E;
+            --bg-card: rgba(28, 28, 30, 0.8);
+
+            --text-primary: rgba(255, 255, 255, 0.87);
+            --text-secondary: rgba(255, 255, 255, 0.60);
+            --text-tertiary: rgba(255, 255, 255, 0.38);
+
+            --border-primary: rgba(255, 255, 255, 0.1);
+            --border-secondary: rgba(255, 255, 255, 0.06);
+
+            --shadow-main: 0 8px 24px rgba(0, 0, 0, 0.3);
+            --shadow-hover: 0 12px 40px rgba(0, 0, 0, 0.4);
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            background: var(--bg-primary);
+            background-image:
+                radial-gradient(circle at 20% 20%, rgba(10, 132, 255, 0.05) 0%, transparent 50%),
+                radial-gradient(circle at 80% 80%, rgba(50, 215, 75, 0.05) 0%, transparent 50%),
+                radial-gradient(circle at 50% 50%, rgba(191, 90, 242, 0.03) 0%, transparent 50%);
+            color: var(--text-primary);
+            font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'SF Pro Text', system-ui, sans-serif;
+            font-feature-settings: 'kern' 1;
+            text-rendering: optimizeLegibility;
+            -webkit-font-smoothing: antialiased;
+            -moz-osx-font-smoothing: grayscale;
+            line-height: 1.47059;
+            letter-spacing: -0.022em;
+            min-height: 100vh;
+            overflow-x: auto;
+        }
+
+        /* 科技网格背景 */
+        body::before {
+            content: '';
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background:
+                linear-gradient(rgba(255, 255, 255, 0.005) 1px, transparent 1px),
+                linear-gradient(90deg, rgba(255, 255, 255, 0.005) 1px, transparent 1px);
+            background-size: 40px 40px;
+            z-index: -1;
+            pointer-events: none;
+            opacity: 0.6;
+        }
+
+        /* 顶部导航栏 */
+        .nav-bar {
+            position: sticky;
+            top: 0;
+            z-index: 1000;
+            background: rgba(28, 28, 30, 0.85);
+            backdrop-filter: blur(40px) saturate(180%);
+            -webkit-backdrop-filter: blur(40px) saturate(180%);
+            border-bottom: 0.5px solid var(--border-primary);
+            padding: 16px 0;
+        }
+
+        .nav-container {
+            max-width: 1600px;
+            margin: 0 auto;
+            padding: 0 32px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+
+        .nav-brand {
+            display: flex;
+            align-items: center;
+            gap: 16px;
+        }
+
+        .nav-logo {
+            width: 32px;
+            height: 32px;
+            background: linear-gradient(135deg, var(--primary-blue), var(--primary-purple));
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 18px;
+            font-weight: 700;
+            color: white;
+        }
+
+        .nav-title {
+            font-size: 24px;
+            font-weight: 700;
+            letter-spacing: -0.02em;
+            background: linear-gradient(135deg, var(--primary-blue), var(--primary-green), var(--primary-purple));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-size: 200% 200%;
+            animation: gradientShift 6s ease-in-out infinite;
+        }
+
+        @keyframes gradientShift {
+            0%, 100% { background-position: 0% 50%; }
+            50% { background-position: 100% 50%; }
+        }
+
+        .nav-status {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            background: rgba(50, 215, 75, 0.1);
+            border: 0.5px solid rgba(50, 215, 75, 0.3);
+            border-radius: 20px;
+            padding: 8px 16px;
+        }
+
+        .status-dot {
+            width: 8px;
+            height: 8px;
+            background: var(--primary-green);
+            border-radius: 50%;
+            animation: pulse 2s infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% {
+                transform: scale(1);
+                box-shadow: 0 0 0 0 rgba(50, 215, 75, 0.7);
+            }
+            70% {
+                transform: scale(1.1);
+                box-shadow: 0 0 0 10px rgba(50, 215, 75, 0);
+            }
+        }
+
+        /* 主内容区域 - 横向布局 */
+        .main-content {
+            max-width: 1600px;
+            margin: 0 auto;
+            padding: 32px;
+            display: grid;
+            grid-template-columns: 2fr 1fr 1fr;
+            gap: 32px;
+            min-height: calc(100vh - 120px);
+        }
+
+        /* 视频监控区域 */
+        .video-section {
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+        }
+
+        .section-card {
+            background: var(--bg-card);
+            backdrop-filter: blur(40px) saturate(180%);
+            -webkit-backdrop-filter: blur(40px) saturate(180%);
+            border: 0.5px solid var(--border-primary);
+            border-radius: 20px;
+            overflow: hidden;
+            transition: all 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+            box-shadow: var(--shadow-main);
+        }
+
+        .section-card:hover {
+            transform: translateY(-2px);
+            box-shadow: var(--shadow-hover);
+            border-color: var(--border-primary);
+        }
+
+        .card-header {
+            padding: 24px 28px 20px;
+            border-bottom: 0.5px solid var(--border-secondary);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+
+        .card-title {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            font-size: 20px;
+            font-weight: 600;
+            letter-spacing: -0.02em;
+        }
+
+        .card-icon {
+            width: 36px;
+            height: 36px;
+            border-radius: 10px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 16px;
+            color: white;
+            font-weight: 600;
+        }
+
+        .video-icon {
+            background: linear-gradient(135deg, var(--primary-blue), var(--primary-purple));
+        }
+
+        .detection-icon {
+            background: linear-gradient(135deg, var(--primary-orange), var(--primary-red));
+        }
+
+        .analysis-icon {
+            background: linear-gradient(135deg, var(--primary-green), var(--primary-blue));
+        }
+
+        .live-badge {
+            background: rgba(255, 69, 58, 0.15);
+            border: 0.5px solid rgba(255, 69, 58, 0.3);
+            color: var(--primary-red);
+            padding: 6px 12px;
+            border-radius: 12px;
+            font-size: 12px;
+            font-weight: 600;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        /* 视频容器 */
+        .video-container {
+            aspect-ratio: 16/10;
+            background: #000;
+            margin: 0 28px 28px;
+            border-radius: 16px;
+            overflow: hidden;
+            position: relative;
+            border: 0.5px solid var(--border-secondary);
+            box-shadow: inset 0 0 20px rgba(0, 0, 0, 0.3);
+        }
+
+        .video-stream {
+            width: 100%;
+            height: 100%;
+            object-fit: contain;
+        }
+
+        .video-overlay {
+            position: absolute;
+            bottom: 16px;
+            left: 16px;
+            right: 16px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .video-info {
+            background: rgba(0, 0, 0, 0.6);
+            backdrop-filter: blur(10px);
+            color: white;
+            padding: 8px 12px;
+            border-radius: 10px;
+            font-size: 12px;
+            font-weight: 500;
+            border: 0.5px solid rgba(255, 255, 255, 0.1);
+        }
+
+        /* 检测分析区域 */
+        .detection-section {
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+        }
+
+        .card-content {
+            padding: 28px;
+            flex: 1;
+        }
+
+        .detection-summary {
+            text-align: center;
+            margin-bottom: 24px;
+        }
+
+        .detection-status {
+            width: 80px;
+            height: 80px;
+            margin: 0 auto 16px;
+            border-radius: 20px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 32px;
+            transition: all 0.3s ease;
+            border: 2px solid transparent;
+        }
+
+        .detection-active {
+            background: rgba(50, 215, 75, 0.15);
+            border-color: var(--primary-green);
+            animation: pulse-scale 2s infinite;
+        }
+
+        .detection-inactive {
+            background: rgba(142, 142, 147, 0.15);
+            border-color: rgba(142, 142, 147, 0.3);
+        }
+
+        @keyframes pulse-scale {
+            0%, 100% { transform: scale(1); }
+            50% { transform: scale(1.05); }
+        }
+
+        .detection-message {
+            font-size: 18px;
+            font-weight: 600;
+            margin-bottom: 8px;
+            color: var(--text-primary);
+        }
+
+        .detection-details {
+            font-size: 14px;
+            color: var(--text-secondary);
+            line-height: 1.4;
+        }
+
+        /* 统计网格 */
+        .stats-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 16px;
+            margin-top: 24px;
+        }
+
+        .stat-item {
+            background: rgba(255, 255, 255, 0.05);
+            border: 0.5px solid var(--border-secondary);
+            border-radius: 12px;
+            padding: 20px 16px;
+            text-align: center;
+            transition: all 0.2s ease;
+        }
+
+        .stat-item:hover {
+            background: rgba(255, 255, 255, 0.08);
+            transform: translateY(-1px);
+        }
+
+        .stat-value {
+            font-size: 24px;
+            font-weight: 700;
+            letter-spacing: -0.03em;
+            margin-bottom: 6px;
+            color: var(--text-primary);
+        }
+
+        .stat-label {
+            font-size: 11px;
+            color: var(--text-secondary);
+            font-weight: 500;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        /* 3D分析区域 */
+        .analysis-section {
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+        }
+
+        /* 3D可视化 */
+        .viz-container {
+            aspect-ratio: 1/1;
+            background: #000;
+            border-radius: 16px;
+            border: 0.5px solid var(--border-secondary);
+            overflow: hidden;
+            position: relative;
+            margin: 0 28px 20px;
+            box-shadow: inset 0 0 20px rgba(0, 0, 0, 0.3);
+        }
+
+        .viz-image {
+            width: 100%;
+            height: 100%;
+            object-fit: contain;
+        }
+
+        .viz-placeholder {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            text-align: center;
+            color: var(--text-tertiary);
+        }
+
+        .viz-placeholder-icon {
+            font-size: 32px;
+            margin-bottom: 8px;
+            opacity: 0.5;
+        }
+
+        /* 坐标信息 */
+        .coordinates-info {
+            padding: 0 28px 28px;
+        }
+
+        .coord-list {
+            list-style: none;
+        }
+
+        .coord-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 12px 0;
+            border-bottom: 0.5px solid var(--border-secondary);
+            font-size: 14px;
+        }
+
+        .coord-item:last-child {
+            border-bottom: none;
+        }
+
+        .coord-label {
+            color: var(--text-secondary);
+            font-weight: 500;
+        }
+
+        .coord-value {
+            font-weight: 600;
+            font-family: 'SF Mono', 'Monaco', monospace;
+            color: var(--primary-green);
+        }
+
+        /* VLM分析内容 */
+        .analysis-content {
+            margin-top: 20px;
+        }
+
+        .analysis-item {
+            margin-bottom: 20px;
+            padding: 16px;
+            background: rgba(255, 255, 255, 0.03);
+            border-radius: 12px;
+            border: 0.5px solid var(--border-secondary);
+        }
+
+        .analysis-label {
+            font-size: 14px;
+            font-weight: 600;
+            color: var(--text-primary);
+            margin-bottom: 8px;
+        }
+
+        .analysis-text {
+            font-size: 13px;
+            color: var(--text-secondary);
+            line-height: 1.5;
+        }
+
+        /* 底部状态栏 */
+        .footer-status {
+            max-width: 1600px;
+            margin: 0 auto;
+            padding: 20px 32px 32px;
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 20px;
+        }
+
+        .status-card {
+            background: var(--bg-card);
+            border: 0.5px solid var(--border-secondary);
+            border-radius: 12px;
+            padding: 16px;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            transition: all 0.2s ease;
+        }
+
+        .status-card:hover {
+            background: rgba(255, 255, 255, 0.05);
+        }
+
+        .status-icon {
+            width: 24px;
+            height: 24px;
+            border-radius: 6px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 12px;
+            color: white;
+        }
+
+        .status-text {
+            flex: 1;
+        }
+
+        .status-title {
+            font-size: 12px;
+            color: var(--text-secondary);
+            margin-bottom: 2px;
+        }
+
+        .status-value {
+            font-size: 14px;
+            font-weight: 600;
+            color: var(--text-primary);
+        }
+
+        /* 响应式设计 */
+        @media (max-width: 1400px) {
+            .main-content {
+                grid-template-columns: 1fr;
+                gap: 24px;
+                max-width: 1000px;
+            }
+
+            .footer-status {
+                grid-template-columns: 1fr 1fr;
+                max-width: 1000px;
+            }
+        }
+
+        @media (max-width: 768px) {
+            .nav-container {
+                padding: 0 20px;
+            }
+
+            .nav-title {
+                font-size: 20px;
+            }
+
+            .main-content {
+                padding: 20px;
+                gap: 20px;
+            }
+
+            .card-header {
+                padding: 20px 24px 16px;
+            }
+
+            .card-content {
+                padding: 24px;
+            }
+
+            .video-container, .viz-container {
+                margin: 0 24px 20px;
+            }
+
+            .coordinates-info {
+                padding: 0 24px 24px;
+            }
+
+            .footer-status {
+                grid-template-columns: 1fr;
+                padding: 16px 20px 24px;
+            }
+        }
+
+        /* 加载动画 */
+        .loading {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            color: var(--text-secondary);
+            font-size: 14px;
+        }
+
+        .loading::before {
+            content: '';
+            width: 16px;
+            height: 16px;
+            border: 2px solid var(--border-secondary);
+            border-top: 2px solid var(--primary-blue);
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+    </style>
+</head>
+<body>
+    <!-- 顶部导航栏 -->
+    <nav class="nav-bar">
+        <div class="nav-container">
+            <div class="nav-brand">
+                <div class="nav-logo">🐾</div>
+                <div class="nav-title">Pet Intelligence</div>
+            </div>
+            <div class="nav-status">
+                <div class="status-dot"></div>
+                <span>智能监控运行中</span>
+            </div>
+        </div>
+    </nav>
+
+    <!-- 主内容区域 -->
+    <main class="main-content">
+        <!-- 视频监控区域 -->
+        <section class="video-section">
+            <div class="section-card">
+                <div class="card-header">
+                    <div class="card-title">
+                        <div class="card-icon video-icon">📹</div>
+                        <span>实时视频监控</span>
+                    </div>
+                    <div class="live-badge">
+                        <div class="status-dot" style="width: 6px; height: 6px; animation: none;"></div>
+                        <span>LIVE</span>
+                    </div>
+                </div>
+                <div class="video-container">
+                    <img class="video-stream" src="{{ url_for('video_feed') }}" alt="监控画面" />
+                    <div class="video-overlay">
+                        <div class="video-info">🎥 HD 1080p</div>
+                        <div class="video-info" id="frame-info">帧: 0/0</div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- 检测分析区域 -->
+        <section class="detection-section">
+            <div class="section-card">
+                <div class="card-header">
+                    <div class="card-title">
+                        <div class="card-icon detection-icon">🎯</div>
+                        <span>智能检测</span>
+                    </div>
+                </div>
+                <div class="card-content">
+                    <div class="detection-summary">
+                        <div id="detection-status" class="detection-status detection-inactive">👀</div>
+                        <div id="detection-message" class="detection-message">监控中</div>
+                        <div id="detection-details" class="detection-details">等待宠物出现...</div>
+                    </div>
+
+                    <div class="stats-grid">
+                        <div class="stat-item">
+                            <div class="stat-value" id="total-detections">0</div>
+                            <div class="stat-label">总检测</div>
+                        </div>
+                        <div class="stat-item">
+                            <div class="stat-value" id="cat-detections">0</div>
+                            <div class="stat-label">猫检测</div>
+                        </div>
+                        <div class="stat-item">
+                            <div class="stat-value" id="detection-rate">0%</div>
+                            <div class="stat-label">准确率</div>
+                        </div>
+                        <div class="stat-item">
+                            <div class="stat-value" id="avg-confidence">0%</div>
+                            <div class="stat-label">置信度</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- 3D分析区域 -->
+        <section class="analysis-section">
+            <div class="section-card">
+                <div class="card-header">
+                    <div class="card-title">
+                        <div class="card-icon analysis-icon">🏠</div>
+                        <span>3D空间定位</span>
+                    </div>
+                </div>
+                <div class="viz-container">
+                    <img id="3d-visualization" class="viz-image" src="/api/3d_visualization" alt="3D可视化" />
+                    <div class="viz-placeholder">
+                        <div class="viz-placeholder-icon">🔄</div>
+                        <div>加载3D模型</div>
+                    </div>
+                </div>
+                <div class="coordinates-info">
+                    <ul class="coord-list">
+                        <li class="coord-item">
+                            <span class="coord-label">X轴位置</span>
+                            <span class="coord-value" id="coord-x">0.00m</span>
+                        </li>
+                        <li class="coord-item">
+                            <span class="coord-label">Y轴位置</span>
+                            <span class="coord-value" id="coord-y">0.00m</span>
+                        </li>
+                        <li class="coord-item">
+                            <span class="coord-label">Z轴位置</span>
+                            <span class="coord-value" id="coord-z">0.00m</span>
+                        </li>
+                    </ul>
+                </div>
+            </div>
+
+            <div class="section-card">
+                <div class="card-header">
+                    <div class="card-title">
+                        <div class="card-icon analysis-icon" style="background: linear-gradient(135deg, var(--primary-purple), var(--primary-pink));">🧠</div>
+                        <span>VLM智能分析</span>
+                    </div>
+                </div>
+                <div class="card-content">
+                    <div id="vlm-analysis">
+                        <div class="loading">加载分析模型</div>
+                    </div>
+                </div>
+            </div>
+        </section>
+    </main>
+
+    <!-- 底部状态栏 -->
+    <footer class="footer-status">
+        <div class="status-card">
+            <div class="status-icon" style="background: var(--primary-green);">✓</div>
+            <div class="status-text">
+                <div class="status-title">检测模型</div>
+                <div class="status-value">运行中</div>
+            </div>
+        </div>
+        <div class="status-card">
+            <div class="status-icon" style="background: var(--primary-orange);">⚠</div>
+            <div class="status-text">
+                <div class="status-title">VLM分析</div>
+                <div class="status-value">待加载</div>
+            </div>
+        </div>
+        <div class="status-card">
+            <div class="status-icon" style="background: var(--primary-blue);">🏠</div>
+            <div class="status-text">
+                <div class="status-title">3D定位</div>
+                <div class="status-value">已就绪</div>
+            </div>
+        </div>
+        <div class="status-card">
+            <div class="status-icon" style="background: var(--primary-purple);">⏱</div>
+            <div class="status-text">
+                <div class="status-title">运行时间</div>
+                <div class="status-value" id="uptime">00:00:00</div>
+            </div>
+        </div>
+    </footer>
+
+    <script>
+        let startTime = new Date();
+
+        // 运行时间计算
+        function updateUptime() {
+            const now = new Date();
+            const diff = now - startTime;
+            const hours = Math.floor(diff / 3600000).toString().padStart(2, '0');
+            const minutes = Math.floor((diff % 3600000) / 60000).toString().padStart(2, '0');
+            const seconds = Math.floor((diff % 60000) / 1000).toString().padStart(2, '0');
+            document.getElementById('uptime').textContent = `${hours}:${minutes}:${seconds}`;
+        }
+
+        // 获取系统状态
+        async function fetchStatus() {
+            try {
+                const response = await fetch('/api/status');
+                const data = await response.json();
+                document.getElementById('frame-info').textContent =
+                    `帧: ${data.current_frame || 0}/${data.total_frames || 0}`;
+            } catch (error) {
+                console.error('获取状态失败:', error);
+            }
+        }
+
+        // 获取检测结果
+        async function fetchDetections() {
+            try {
+                const response = await fetch('/api/detections');
+                const data = await response.json();
+
+                const statusIcon = document.getElementById('detection-status');
+                const message = document.getElementById('detection-message');
+                const details = document.getElementById('detection-details');
+
+                if (data.detections && data.detections.length > 0) {
+                    const catCount = data.detections.filter(d => d.class === '猫').length;
+                    const dogCount = data.detections.filter(d => d.class === '狗').length;
+                    const avgConfidence = data.average_confidence * 100;
+
+                    statusIcon.className = 'detection-status detection-active';
+                    statusIcon.textContent = catCount > 0 ? '🐱' : '🎯';
+                    message.textContent = catCount > 0 ? '猫咪检测成功!' : '检测活跃';
+                    details.textContent = `发现 ${catCount} 只猫, ${dogCount} 只狗 | 置信度 ${avgConfidence.toFixed(1)}%`;
+
+                    // 更新坐标信息
+                    if (data.detections[0].physical_coords) {
+                        const coords = data.detections[0].physical_coords;
+                        document.getElementById('coord-x').textContent = `${coords.x.toFixed(2)}m`;
+                        document.getElementById('coord-y').textContent = `${coords.y.toFixed(2)}m`;
+                        document.getElementById('coord-z').textContent = `${coords.z.toFixed(2)}m`;
+                    }
+                } else {
+                    statusIcon.className = 'detection-status detection-inactive';
+                    statusIcon.textContent = '👀';
+                    message.textContent = '监控中';
+                    details.textContent = '等待宠物出现...';
+                }
+
+                // 更新统计
+                document.getElementById('total-detections').textContent = data.total_detections || 0;
+                document.getElementById('cat-detections').textContent = data.cat_detections || 0;
+                document.getElementById('detection-rate').textContent =
+                    data.total_frames > 0 ? `${((data.cat_detections / data.total_frames) * 100).toFixed(1)}%` : '0%';
+                document.getElementById('avg-confidence').textContent =
+                    data.average_confidence ? `${(data.average_confidence * 100).toFixed(1)}%` : '0%';
+
+            } catch (error) {
+                console.error('获取检测结果失败:', error);
+            }
+        }
+
+        // 获取VLM分析结果
+        async function fetchVLMAnalysis() {
+            try {
+                const response = await fetch('/api/vlm_analysis');
+                const data = await response.json();
+
+                const container = document.getElementById('vlm-analysis');
+                if (data.analysis) {
+                    container.innerHTML = `
+                        <div class="analysis-item">
+                            <div class="analysis-label">场景分析</div>
+                            <div class="analysis-text">${data.analysis.scene || '分析中...'}</div>
+                        </div>
+                        <div class="analysis-item">
+                            <div class="analysis-label">行为识别</div>
+                            <div class="analysis-text">${data.analysis.behavior || '分析中...'}</div>
+                        </div>
+                    `;
+                } else {
+                    container.innerHTML = '<div class="loading">分析模型加载中</div>';
+                }
+            } catch (error) {
+                console.error('获取VLM分析失败:', error);
+            }
+        }
+
+        // 刷新3D可视化
+        function refresh3DVisualization() {
+            const img = document.getElementById('3d-visualization');
+            const placeholder = document.querySelector('.viz-placeholder');
+
+            img.onload = () => {
+                if (placeholder) placeholder.style.display = 'none';
+            };
+
+            img.onerror = () => {
+                if (placeholder) placeholder.style.display = 'flex';
+            };
+
+            img.src = `/api/3d_visualization?${new Date().getTime()}`;
+        }
+
+        // 定时更新
+        setInterval(updateUptime, 1000);
+        setInterval(fetchStatus, 3000);
+        setInterval(fetchDetections, 2000);
+        setInterval(fetchVLMAnalysis, 5000);
+        setInterval(refresh3DVisualization, 8000);
+
+        // 初始加载
+        updateUptime();
+        fetchStatus();
+        fetchDetections();
+        fetchVLMAnalysis();
+        refresh3DVisualization();
+
+        // 苹果式交互增强
+        document.addEventListener('DOMContentLoaded', function() {
+            // 卡片悬浮效果
+            document.querySelectorAll('.section-card, .status-card').forEach(card => {
+                card.addEventListener('mouseenter', function() {
+                    this.style.transform = 'translateY(-2px)';
+                });
+
+                card.addEventListener('mouseleave', function() {
+                    this.style.transform = '';
+                });
+            });
+
+            // 统计项悬浮效果
+            document.querySelectorAll('.stat-item').forEach(item => {
+                item.addEventListener('mouseenter', function() {
+                    this.style.transform = 'translateY(-1px)';
+                });
+
+                item.addEventListener('mouseleave', function() {
+                    this.style.transform = '';
+                });
+            });
+        });
+    </script>
+</body>
+</html>

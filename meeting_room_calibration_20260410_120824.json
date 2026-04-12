@@ -1,0 +1,97 @@
+{
+  "timestamp": "2026-04-10T12:08:24.876524",
+  "video_source": "./real_cat.mp4",
+  "room_type": "meeting_room_4x3m",
+  "calibration_points": [
+    {
+      "pixel": [
+        128,
+        648
+      ],
+      "real": [
+        0.0,
+        0.0
+      ],
+      "description": "左下角原点"
+    },
+    {
+      "pixel": [
+        1152,
+        648
+      ],
+      "real": [
+        4.0,
+        0.0
+      ],
+      "description": "右下角 - 4米宽"
+    },
+    {
+      "pixel": [
+        1152,
+        216
+      ],
+      "real": [
+        4.0,
+        3.0
+      ],
+      "description": "右上角 - 4x3米"
+    },
+    {
+      "pixel": [
+        128,
+        216
+      ],
+      "real": [
+        0.0,
+        3.0
+      ],
+      "description": "左上角 - 3米深"
+    },
+    {
+      "pixel": [
+        640,
+        432
+      ],
+      "real": [
+        2.0,
+        1.5
+      ],
+      "description": "房间中心点"
+    },
+    {
+      "pixel": [
+        384,
+        503
+      ],
+      "real": [
+        1.2,
+        0.8
+      ],
+      "description": "左中辅助点"
+    }
+  ],
+  "homography_matrix": [
+    [
+      0.004107246108020654,
+      0.00016661786439680165,
+      -0.557170603743863
+    ],
+    [
+      8.457933958814445e-05,
+      -0.007227082399768153,
+      4.589159025279157
+    ],
+    [
+      3.1469315789562136e-05,
+      5.610725781975825e-05,
+      1.0
+    ]
+  ],
+  "calibration_complete": true,
+  "coordinate_system": {
+    "origin": "left_bottom_corner",
+    "x_axis": "room_width_meters",
+    "y_axis": "room_depth_meters",
+    "room_dimensions": "4.0m x 3.0m"
+  }
+}
