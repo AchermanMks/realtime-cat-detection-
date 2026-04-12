@@ -25,6 +25,10 @@ MANIFEST
 *.pth
 *.pt
 
+# ONNX and TensorRT Models
+*.onnx
+*.engine
+
 # Virtual Environment
 venv/
 env/

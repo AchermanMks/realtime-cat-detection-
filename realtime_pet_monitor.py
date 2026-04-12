@@ -7,6 +7,22 @@
 import cv2
 import torch
 import numpy as np
+
+# 全局猴子补丁：让 bfloat16 张量转 numpy 时自动升级为 float32
+# 修复 VLM (bfloat16) 与 YOLO 跟踪器同时运行时的 "Got unsupported ScalarType BFloat16" 错误
+_orig_tensor_numpy = torch.Tensor.numpy
+def _safe_numpy(self, *args, **kwargs):
+    if self.dtype == torch.bfloat16:
+        return _orig_tensor_numpy(self.float(), *args, **kwargs)
+    return _orig_tensor_numpy(self, *args, **kwargs)
+torch.Tensor.numpy = _safe_numpy
+
+_orig_array = torch.Tensor.__array__
+def _safe_array(self, *args, **kwargs):
+    if self.dtype == torch.bfloat16:
+        return _orig_array(self.float(), *args, **kwargs)
+    return _orig_array(self, *args, **kwargs)
+torch.Tensor.__array__ = _safe_array
 import json
 import time
 import base64
@@ -54,9 +70,18 @@ class RealtimePetMonitor:
         self.total_frames = 0
         self.running = False
 
-        # 实时检测统计
-        self.total_detections = 0
-        self.cat_detections = 0
+        # 实时检测统计 - 区分检测次数和实际只数
+        self.total_detections = 0  # 总检测次数
+        self.cat_detections = 0    # 猫检测次数
+        self.cat_tracks = {}       # 猫的追踪信息 {track_id: last_seen_frame}
+        self.track_active_window = 60  # 近60帧内出现过的track才算"当前活跃"
+
+        # 3D轨迹：每个track_id独立坐标平滑
+        self.track_smoothed_coords = {}  # {track_id: (x, y, z)}
+        self.track_trajectory = {}       # {track_id: [(x,y,z), ...] 最近N个点}
+        self.trajectory_max_len = 30
+        self.coord_ema_alpha = 0.4       # 指数滑动平均系数
+        self.next_track_id = 1     # 下一个分配的追踪ID
         self.recent_detections = []
         self.detection_history = []
 
@@ -88,25 +113,72 @@ class RealtimePetMonitor:
         self.detection_frequency = 1  # 每帧都检测
         self.skip_detection_counter = 0  # 检测跳帧计数器
 
-        # 猫检测优化 - 超敏感阈值，确保检测到猫
-        self.cat_detection_threshold = 0.01  # 超低阈值，确保检测到所有猫
-        self.dog_detection_threshold = 0.15   # 狗的阈值
+        # 异步检测解耦：视频流不再等待检测，检测在后台线程跑最新帧
+        self.latest_raw_frame = None          # 最新原始帧（视频线程写入）
+        self.latest_detections_async = []     # 后台检测结果（检测线程写入）
+        self.latest_detections_lock = threading.Lock()
+        self.detection_worker_running = False
+        self.detection_worker_thread = None
+
+        # 猫检测优化 - 跟踪模式下使用合理阈值（ByteTrack会跨帧保留短暂消失的目标）
+        self.primary_cat_threshold = 0.25    # 主要检测阈值（跟踪模式下不再需要极低阈值）
+        self.secondary_cat_threshold = 0.10  # 备用阈值（仅在完全丢失时触发）
+        self.dog_detection_threshold = 0.25  # 狗的阈值
+        self.infer_imgsz = 1280              # 大输入尺寸，对小/远猫更有效
+
+        # 智能过滤参数
+        self.min_area = 200          # 最小面积
+        self.max_area = 50000        # 最大面积
+        self.min_aspect_ratio = 0.3  # 最小宽高比
+        self.max_aspect_ratio = 3.0  # 最大宽高比
+
+        # 质量评分权重
+        self.quality_weights = {
+            'detection': 1.0,    # 检测置信度
+            'area': 0.3,        # 面积权重
+            'aspect_ratio': 0.2, # 宽高比权重
+            'position': 0.1     # 位置权重
+        }
 
         # 加载组件
         self._load_components()
+
+    @property
+    def unique_cats(self):
+        """动态计算：只统计最近track_active_window帧内仍活跃的track_id"""
+        cutoff = self.frame_count - self.track_active_window
+        return {tid for tid, last_seen in self.cat_tracks.items() if last_seen >= cutoff}
 
     def _load_components(self):
         """加载核心组件"""
         print("🔧 加载检测组件...")
 
-        # 加载YOLO模型
+        # 加载YOLO模型 - yolo11x (SOTA 2025) + TensorRT FP16
+        self.yolo_model = None
+        model_stem = 'yolo11x'  # 更强：相同精度下比yolov8x快~20%，mAP更高
+        engine_path = Path(f'{model_stem}.engine')
+        pt_path = Path(f'{model_stem}.pt')
         try:
-            self.yolo_model = YOLO('yolov8n.pt')
-            if torch.cuda.is_available():
-                self.yolo_model.to('cuda')
-                print("✅ YOLO模型加载成功 (GPU加速)")
+            if engine_path.exists():
+                self.yolo_model = YOLO(str(engine_path))
+                print(f"✅ {model_stem} 加载成功 (TensorRT FP16 engine)")
             else:
-                print("✅ YOLO模型加载成功 (CPU模式)")
+                self.yolo_model = YOLO(str(pt_path))  # 不存在会自动下载
+                if torch.cuda.is_available():
+                    self.yolo_model.to('cuda')
+                    print(f"✅ {model_stem} 加载成功 (PyTorch + GPU)")
+                    try:
+                        print(f"🔧 导出TensorRT FP16引擎（首次约2-5分钟，之后自动复用）...")
+                        self.yolo_model.export(format='engine', half=True,
+                                               imgsz=self.infer_imgsz, device=0,
+                                               workspace=4)
+                        if engine_path.exists():
+                            self.yolo_model = YOLO(str(engine_path))
+                            print("✅ 已切换到TensorRT引擎")
+                    except Exception as ex:
+                        print(f"⚠️ TensorRT导出失败，使用.pt继续: {ex}")
+                else:
+                    print(f"✅ {model_stem} 加载成功 (CPU)")
         except Exception as e:
             print(f"❌ YOLO模型加载失败: {e}")
             self.yolo_model = None
@@ -121,6 +193,78 @@ class RealtimePetMonitor:
 
         # 初始化视频
         self._initialize_video()
+
+        # 启动异步检测工作线程（解耦视频播放与AI推理）
+        self._start_detection_worker()
+
+    def _start_detection_worker(self):
+        """后台检测线程：持续处理最新帧，结果供视频流叠加"""
+        if self.yolo_model is None:
+            print("⚠️ 无YOLO模型，跳过异步检测线程")
+            return
+
+        self.detection_worker_running = True
+
+        def worker():
+            print("🚀 异步检测线程已启动")
+            while self.detection_worker_running:
+                frame = self.latest_raw_frame
+                if frame is None:
+                    time.sleep(0.003)
+                    continue
+                try:
+                    dets = self._multi_threshold_detection(frame)
+                    now = time.time()
+                    # 更新统计 + 3D坐标平滑 + 速度估计
+                    for d in dets:
+                        self.total_detections += 1
+                        if d['class'] == '猫':
+                            self.cat_detections += 1
+                        self._update_3d_state(d, now)
+                    with self.latest_detections_lock:
+                        self.latest_detections_async = dets
+                    # 维护历史（供3D可视化使用）
+                    self.recent_detections.extend(dets)
+                    if len(self.recent_detections) > 20:
+                        self.recent_detections = self.recent_detections[-20:]
+                    self.detection_history.extend(dets)
+                    if len(self.detection_history) > 30:
+                        self.detection_history = self.detection_history[-30:]
+                except Exception as e:
+                    import traceback
+                    print(f"⚠️ 异步检测异常: {e}")
+                    traceback.print_exc()
+                    time.sleep(0.5)  # 异常时多睡避免刷屏
+
+        self.detection_worker_thread = threading.Thread(target=worker, daemon=True)
+        self.detection_worker_thread.start()
+
+    def _update_3d_state(self, det, now):
+        """对单个检测做EMA坐标平滑 + 轨迹累积，结果写回det供3D视图使用。"""
+        tid = det.get('track_id')
+        coords = det.get('physical_coords')
+        if tid is None or not coords:
+            return
+
+        raw = (coords.get('x', 0.0), coords.get('y', 0.0), coords.get('z', 0.0))
+        prev_smoothed = self.track_smoothed_coords.get(tid)
+        a = self.coord_ema_alpha
+        if prev_smoothed is None:
+            smoothed = raw
+        else:
+            smoothed = (
+                a * raw[0] + (1 - a) * prev_smoothed[0],
+                a * raw[1] + (1 - a) * prev_smoothed[1],
+                a * raw[2] + (1 - a) * prev_smoothed[2],
+            )
+
+        self.track_smoothed_coords[tid] = smoothed
+        traj = self.track_trajectory.setdefault(tid, [])
+        traj.append(smoothed)
+        if len(traj) > self.trajectory_max_len:
+            del traj[:len(traj) - self.trajectory_max_len]
+
+        det['physical_coords'] = {'x': smoothed[0], 'y': smoothed[1], 'z': smoothed[2]}
 
     def _load_3d_components(self):
         """加载3D定位相关组件"""
@@ -267,60 +411,19 @@ class RealtimePetMonitor:
             print(f"❌ 视频文件不存在: {self.video_file}")
 
     def detect_cats_fast(self, frame):
-        """快速猫检测 - 专门优化实时性能"""
+        """优化的猫检测 - 高准确率 + 实时性能"""
         if self.yolo_model is None:
             return []
 
         try:
-            # 使用最敏感的检测配置，确保检测到所有猫
-            results = self.yolo_model(frame, conf=0.01, iou=0.3, verbose=False)
-            detections = []
+            # 多阈值检测策略
+            detections = self._multi_threshold_detection(frame)
 
-            for r in results:
-                boxes = r.boxes
-                if boxes is not None:
-                    for box in boxes:
-                        cls = int(box.cls[0])
-                        conf = float(box.conf[0])
-
-                        # 只检测猫和狗
-                        is_cat = cls == 15
-                        is_dog = cls == 16
-
-                        if not (is_cat or is_dog):
-                            continue
-
-                        # 应用阈值
-                        threshold = self.cat_detection_threshold if is_cat else self.dog_detection_threshold
-                        if conf <= threshold:
-                            continue
-
-                        x1, y1, x2, y2 = box.xyxy[0].tolist()
-                        center_x = int((x1 + x2) / 2)
-                        center_y = int((y1 + y2) / 2)
-                        bbox_area = (x2 - x1) * (y2 - y1)
-
-                        # 过滤过小的检测框 - 进一步放宽
-                        if bbox_area < 200:  # 更小的面积要求，确保检测小猫
-                            continue
-
-                        # 计算物理坐标，包含Z轴深度
-                        physical_coords = self._pixel_to_physical(center_x, center_y, bbox_area)
-
-                        detection = {
-                            'class': '猫' if is_cat else '狗',
-                            'confidence': conf,
-                            'bbox': [int(x1), int(y1), int(x2), int(y2)],
-                            'center': [center_x, center_y],
-                            'physical_coords': physical_coords,
-                            'area': bbox_area
-                        }
-                        detections.append(detection)
-
-                        # 更新统计
-                        self.total_detections += 1
-                        if is_cat:
-                            self.cat_detections += 1
+            # 更新统计
+            for detection in detections:
+                self.total_detections += 1
+                if detection['class'] == '猫':
+                    self.cat_detections += 1
 
             # 保持最近的检测记录
             self.recent_detections.extend(detections)
@@ -337,6 +440,160 @@ class RealtimePetMonitor:
         except Exception as e:
             print(f"检测失败: {e}")
             return []
+
+    def _multi_threshold_detection(self, frame):
+        """SOTA检测+跟踪：yolo11x + BoT-SORT(ReID外观特征)，遮挡抗性&ID稳定性远优于ByteTrack。
+        丢失时自动切高分辨率+TTA做兜底扫描。"""
+        tracker_cfg = 'bytetrack.yaml'  # 最稳定，避免ReID/GMC引入的bfloat16冲突
+
+        results = self.yolo_model.track(
+            frame,
+            conf=self.primary_cat_threshold,
+            iou=0.5,
+            imgsz=self.infer_imgsz,
+            classes=[15, 16],
+            tracker=tracker_cfg,
+            persist=True,
+            verbose=False,
+        )
+        detections = self._extract_detections(results, 'track')
+
+        # 兜底：连续无猫时，放大分辨率 + TTA多尺度增强扫描（速度慢，仅偶发触发）
+        if not any(d['class'] == '猫' for d in detections):
+            try:
+                secondary_results = self.yolo_model(
+                    frame,
+                    conf=self.secondary_cat_threshold,
+                    iou=0.3,
+                    imgsz=1920,        # 更大输入尺寸找小/远目标
+                    classes=[15, 16],
+                    augment=True,      # TTA：水平翻转+多尺度
+                    verbose=False,
+                )
+                detections.extend(self._extract_detections(secondary_results, 'secondary'))
+            except Exception:
+                pass
+
+        return detections
+
+    def _extract_detections(self, results, detection_type):
+        """提取并过滤检测结果"""
+        detections = []
+
+        for r in results:
+            boxes = r.boxes
+            if boxes is not None:
+                # 强制float32，避免VLM引入的bfloat16污染导致numpy转换失败
+                try:
+                    if boxes.data is not None and boxes.data.dtype != torch.float32:
+                        boxes.data = boxes.data.float()
+                except Exception:
+                    pass
+                for box in boxes:
+                    cls = int(box.cls[0].float().item())
+                    conf = float(box.conf[0].float().item())
+
+                    # 只处理猫和狗
+                    is_cat = cls == 15
+                    is_dog = cls == 16
+
+                    if not (is_cat or is_dog):
+                        continue
+
+                    # 狗的阈值过滤
+                    if is_dog and conf <= self.dog_detection_threshold:
+                        continue
+
+                    x1, y1, x2, y2 = box.xyxy[0].float().tolist()
+                    center_x = int((x1 + x2) / 2)
+                    center_y = int((y1 + y2) / 2)
+                    width = x2 - x1
+                    height = y2 - y1
+                    bbox_area = width * height
+                    aspect_ratio = width / height if height > 0 else 0
+
+                    # 智能过滤
+                    if not self._passes_quality_filters(bbox_area, aspect_ratio):
+                        continue
+
+                    # 计算物理坐标
+                    physical_coords = self._pixel_to_physical(center_x, center_y, bbox_area)
+
+                    # 追踪ID：仅来自tracker的ID参与唯一性统计（secondary兜底帧不计）
+                    track_id = None
+                    if is_cat and detection_type == 'track':
+                        if hasattr(box, 'id') and box.id is not None:
+                            track_id = int(box.id[0].float().item())
+                            self.cat_tracks[track_id] = self.frame_count
+
+                    detection = {
+                        'class': '猫' if is_cat else '狗',
+                        'confidence': conf,
+                        'bbox': [int(x1), int(y1), int(x2), int(y2)],
+                        'center': [center_x, center_y],
+                        'physical_coords': physical_coords,
+                        'area': bbox_area,
+                        'aspect_ratio': aspect_ratio,
+                        'track_id': track_id,
+                        'detection_type': detection_type
+                    }
+
+                    # 添加质量分数
+                    if is_cat:
+                        detection['quality_score'] = self._calculate_quality_score(detection)
+                        # 只保留高质量的猫检测
+                        if detection['quality_score'] > 0.3:
+                            detections.append(detection)
+                    else:
+                        detections.append(detection)
+
+        return detections
+
+    def _passes_quality_filters(self, area, aspect_ratio):
+        """智能质量过滤器"""
+        if area < self.min_area or area > self.max_area:
+            return False
+        if aspect_ratio < self.min_aspect_ratio or aspect_ratio > self.max_aspect_ratio:
+            return False
+        return True
+
+    def _calculate_quality_score(self, detection):
+        """计算检测质量分数"""
+        score = 0
+
+        # 置信度权重
+        conf_score = min(detection['confidence'] / 0.1, 1.0)
+        score += conf_score * self.quality_weights['detection']
+
+        # 面积权重
+        area = detection['area']
+        if 2000 <= area <= 8000:
+            area_score = 1.0
+        elif 1000 <= area <= 15000:
+            area_score = 0.7
+        else:
+            area_score = 0.3
+        score += area_score * self.quality_weights['area']
+
+        # 宽高比权重
+        aspect_ratio = detection['aspect_ratio']
+        if 0.8 <= aspect_ratio <= 1.5:
+            ratio_score = 1.0
+        elif 0.5 <= aspect_ratio <= 2.0:
+            ratio_score = 0.7
+        else:
+            ratio_score = 0.3
+        score += ratio_score * self.quality_weights['aspect_ratio']
+
+        # 位置权重 (避免边缘检测)
+        center_x, center_y = detection['center']
+        if 100 < center_x < 1180 and 50 < center_y < 670:
+            position_score = 1.0
+        else:
+            position_score = 0.5
+        score += position_score * self.quality_weights['position']
+
+        return score
 
     def _pixel_to_physical(self, pixel_x, pixel_y, bbox_area=None):
         """像素坐标转物理坐标，包含Z轴深度估算"""
@@ -357,6 +614,39 @@ class RealtimePetMonitor:
             return {"x": x, "y": y, "z": z}
         except Exception as e:
             return {"x": 0, "y": 0, "z": 0}
+
+    def _assign_track_id(self, center_x, center_y, distance_threshold=100):
+        """基于位置的简单追踪 - 为猫分配唯一ID"""
+        current_frame = self.frame_count
+
+        # 清理过期的追踪 (超过30帧未见)
+        expired_tracks = []
+        for track_id, last_frame in self.cat_tracks.items():
+            if current_frame - last_frame > 30:
+                expired_tracks.append(track_id)
+
+        for track_id in expired_tracks:
+            del self.cat_tracks[track_id]
+
+        # 寻找最近的现有追踪
+        best_track_id = None
+        min_distance = float('inf')
+
+        for track_id, last_frame in self.cat_tracks.items():
+            # 只考虑最近的追踪 (10帧内)
+            if current_frame - last_frame <= 10:
+                best_track_id = track_id
+                break
+
+        # 如果没找到匹配的追踪，创建新的
+        if best_track_id is None:
+            best_track_id = self.next_track_id
+            self.next_track_id += 1
+
+        # 更新追踪信息
+        self.cat_tracks[best_track_id] = current_frame
+
+        return best_track_id
 
     def _estimate_z_depth(self, pixel_x, pixel_y, bbox_area=None):
         """基于多种因素估算Z轴深度"""
@@ -669,23 +959,34 @@ class RealtimePetMonitor:
                     ax.scatter(latest_pos[0], latest_pos[1], latest_pos[2],
                              c='blue', s=80, alpha=0.9, edgecolors='cyan', linewidths=2)
 
-                # 标记当前活跃位置
-                if recent_detections:
-                    latest = recent_detections[-1]
-                    if latest.get('physical_coords'):
-                        coords = latest['physical_coords']
-                        if latest['class'] == '猫':
-                            # 脉冲效果的当前位置
-                            ax.scatter(coords['x'], coords['y'], coords['z'],
-                                     c='white', s=150, alpha=0.9, marker='*',
-                                     edgecolors='lime', linewidths=3)
-                            ax.scatter(coords['x'], coords['y'], coords['z'],
-                                     c='lime', s=80, alpha=0.6)
+                # 标记每只活跃猫的当前位置 + 精确XYZ坐标 + 轨迹线
+                active_cat_ids = self.unique_cats
+                for tid in active_cat_ids:
+                    traj = self.track_trajectory.get(tid)
+                    if not traj:
+                        continue
+                    # 轨迹线（按时间渐变颜色）
+                    if len(traj) >= 2:
+                        import matplotlib.cm as cm
+                        xs = [p[0] for p in traj]
+                        ys = [p[1] for p in traj]
+                        zs = [p[2] for p in traj]
+                        for i in range(1, len(traj)):
+                            c = cm.plasma(i / len(traj))
+                            ax.plot(xs[i-1:i+1], ys[i-1:i+1], zs[i-1:i+1],
+                                    color=c, linewidth=2, alpha=0.85)
 
-                            # 显示坐标信息
-                            ax.text(coords['x'], coords['y'], coords['z'] + 0.1,
-                                   f"({coords['x']:.1f},{coords['y']:.1f})",
-                                   fontsize=8, color='lime', ha='center')
+                    # 当前位置：大星标
+                    cx, cy, cz = traj[-1]
+                    ax.scatter(cx, cy, cz, c='white', s=180, alpha=0.95,
+                               marker='*', edgecolors='lime', linewidths=2.5)
+
+                    # 精确XYZ文本（多行）
+                    coord_text = f"CAT#{tid}\nX={cx:.2f}m\nY={cy:.2f}m\nZ={cz:.2f}m"
+                    ax.text(cx, cy, cz + 0.25, coord_text,
+                            fontsize=9, color='lime', ha='center',
+                            bbox=dict(boxstyle='round,pad=0.3', facecolor='black',
+                                      edgecolor='lime', alpha=0.7))
 
             # 美化设置
             ax.set_xlabel('X(m)', fontsize=9, color='cyan')
@@ -702,11 +1003,9 @@ class RealtimePetMonitor:
             azim = 45 + (current_time % 60) * 0.5  # 缓慢旋转视角
             ax.view_init(elev=25, azim=azim)
 
-            # 移除坐标轴以获得更干净的外观
-            ax.set_xticks([])
-            ax.set_yticks([])
-            ax.set_zticks([])
-            ax.grid(False)
+            # 保留坐标刻度以便读取精确位置
+            ax.tick_params(colors='cyan', labelsize=7)
+            ax.grid(True, linestyle=':', alpha=0.25, color='cyan')
 
             # 添加时间戳
             ax.text2D(0.02, 0.98, f"更新: {time.strftime('%H:%M:%S')}",
@@ -1182,7 +1481,7 @@ def index():
                 fetch('/api/detections')
                     .then(response => response.json())
                     .then(data => {
-                        document.getElementById('cat-count').textContent = data.cat_detections || 0;
+                        document.getElementById('cat-count').textContent = data.unique_cats || 0;
                         document.getElementById('total-count').textContent = data.total_detections || 0;
                         document.getElementById('frame-count').textContent = data.total_frames || 0;
 
@@ -1192,8 +1491,8 @@ def index():
 
                         // 更新导航栏状态
                         const navStats = document.getElementById('nav-stats');
-                        if (navStats && data.cat_detections > 0) {
-                            navStats.textContent = `检测到 ${data.cat_detections} 只猫咪`;
+                        if (navStats && data.unique_cats > 0) {
+                            navStats.textContent = `检测到 ${data.unique_cats} 只猫咪 (${data.cat_detections}次检测)`;
                         }
                     })
                     .catch(error => console.log('Stats error:', error));
@@ -1350,7 +1649,6 @@ def video_feed():
     """优化的流畅视频流"""
     def generate():
         frame_time = 1.0 / monitor_system.target_fps  # 计算帧间隔
-        detection_skip_count = 0
 
         while True:
             if monitor_system is None:
@@ -1362,43 +1660,31 @@ def video_feed():
             if frame is None:
                 break
 
-            # 优化：每2帧进行一次检测以提高流畅度
-            detections = []
-            if detection_skip_count % 2 == 0:
-                detections = monitor_system.detect_cats_fast(frame)
-            detection_skip_count += 1
+            # 将最新帧交给后台检测线程，视频流本身永不等待AI推理
+            monitor_system.latest_raw_frame = frame
 
-            # 如果没有新检测，使用最近的检测结果
-            if not detections and monitor_system.recent_detections:
-                detections = monitor_system.recent_detections[-3:]  # 使用最近3个检测
+            # 直接读取后台最新检测结果（可能滞后1-2帧，但视频保持30fps流畅）
+            with monitor_system.latest_detections_lock:
+                detections = list(monitor_system.latest_detections_async)
 
-            # 快速绘制检测结果
+            # 简洁视频叠加：仅框 + ID标签（3D坐标在3D视图面板里显示）
             for det in detections:
                 x1, y1, x2, y2 = det['bbox']
-
                 if det['class'] == '猫':
-                    # 猫用亮绿色
                     color = (0, 255, 0)
-                    thickness = 3
-
-                    # 简化绘制 - 减少文本渲染
-                    cv2.rectangle(frame, (x1, y1), (x2, y2), color, thickness)
-
-                    # 简化标签
-                    label = f"CAT"
-                    cv2.rectangle(frame, (x1, y1-25), (x1 + 60, y1), color, -1)
-                    cv2.putText(frame, label, (x1+5, y1-8),
-                               cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 0, 0), 2)
-
+                    cv2.rectangle(frame, (x1, y1), (x2, y2), color, 3)
+                    tid = det.get('track_id')
+                    label = f"CAT#{tid}" if tid is not None else "CAT"
+                    cv2.rectangle(frame, (x1, y1 - 25), (x1 + 90, y1), color, -1)
+                    cv2.putText(frame, label, (x1 + 5, y1 - 8),
+                                cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 0, 0), 2)
                 else:
-                    # 狗用蓝色，更简化
                     color = (255, 100, 0)
-                    thickness = 2
-                    cv2.rectangle(frame, (x1, y1), (x2, y2), color, thickness)
+                    cv2.rectangle(frame, (x1, y1), (x2, y2), color, 2)
 
             # 简化统计显示
-            if monitor_system.cat_detections > 0:
-                stats_text = f"LIVE | Cats: {monitor_system.cat_detections}"
+            if len(monitor_system.unique_cats) > 0:
+                stats_text = f"LIVE | Cats: {len(monitor_system.unique_cats)}"
                 cv2.putText(frame, stats_text, (10, 30),
                            cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 0), 2)
 
@@ -1428,7 +1714,8 @@ def api_stats():
         return jsonify({'error': 'System not initialized'})
 
     return jsonify({
-        'cat_detections': monitor_system.cat_detections,
+        'cat_detections': monitor_system.cat_detections,      # 检测次数
+        'unique_cats': len(monitor_system.unique_cats),       # 实际猫数量
         'total_detections': monitor_system.total_detections,
         'total_frames': monitor_system.frame_count,
         'running': monitor_system.running
@@ -1449,7 +1736,8 @@ def api_detections():
     return jsonify({
         'detections': monitor_system.recent_detections[-5:],  # 最近5个检测
         'total_detections': monitor_system.total_detections,
-        'cat_detections': monitor_system.cat_detections,
+        'cat_detections': monitor_system.cat_detections,      # 检测次数
+        'unique_cats': len(monitor_system.unique_cats),       # 实际猫数量
         'total_frames': monitor_system.frame_count,
         'average_confidence': avg_confidence
     })
