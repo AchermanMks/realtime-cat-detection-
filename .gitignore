@@ -69,6 +69,11 @@ secrets.json
 credentials.json
 *.env
 
+# Training Data & Runs
+dataset_cat/
+runs/
+*.bak
+
 # Temporary Files
 tmp/
 temp/

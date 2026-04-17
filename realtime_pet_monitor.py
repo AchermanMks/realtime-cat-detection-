@@ -30,7 +30,7 @@ import io
 import gc
 from datetime import datetime
 from pathlib import Path
-from flask import Flask, render_template, Response, jsonify
+from flask import Flask, render_template, Response, jsonify, request
 from ultralytics import YOLO
 import matplotlib
 matplotlib.use('Agg')
@@ -40,7 +40,7 @@ import threading
 
 # VLM分析相关导入
 try:
-    from transformers import Qwen2VLForConditionalGeneration, AutoProcessor
+    from transformers import Qwen3VLForConditionalGeneration, AutoProcessor
     from qwen_vl_utils import process_vision_info
     VLM_AVAILABLE = True
 except ImportError:
@@ -73,7 +73,9 @@ class RealtimePetMonitor:
         # 实时检测统计 - 区分检测次数和实际只数
         self.total_detections = 0  # 总检测次数
         self.cat_detections = 0    # 猫检测次数
+        self.dog_detections = 0    # 狗检测次数
         self.cat_tracks = {}       # 猫的追踪信息 {track_id: last_seen_frame}
+        self.dog_tracks = {}       # 狗的追踪信息 {track_id: last_seen_frame}
         self.track_active_window = 60  # 近60帧内出现过的track才算"当前活跃"
 
         # 3D轨迹：每个track_id独立坐标平滑
@@ -81,6 +83,15 @@ class RealtimePetMonitor:
         self.track_trajectory = {}       # {track_id: [(x,y,z), ...] 最近N个点}
         self.trajectory_max_len = 30
         self.coord_ema_alpha = 0.4       # 指数滑动平均系数
+
+        # 2D bbox 时间戳历史（用于显示端速度外推，框"粘"在目标上）
+        # {track_id: deque([(bbox, ts), ...], maxlen=3)}
+        from collections import deque as _deque
+        self._deque_cls = _deque
+        self.track_bbox_history = {}
+        self.bbox_history_len = 3
+        self.extrapolation_max_age = 0.30   # 最后检测超过此秒数不再外推，避免鬼影
+        self.extrapolation_max_step = 0.15  # 单次外推最多向前推多少秒
         self.next_track_id = 1     # 下一个分配的追踪ID
         self.recent_detections = []
         self.detection_history = []
@@ -92,6 +103,7 @@ class RealtimePetMonitor:
         }
         self.vlm_analysis_interval = 30  # 每30帧分析一次，减少对视频流的影响
         self.last_vlm_analysis_frame = 0
+        self._vlm_running = False  # VLM是否正在后台推理，防止阻塞视频线程
         self.vlm_model = None
         self.vlm_processor = None
         self.vlm_model_loaded = False
@@ -119,12 +131,19 @@ class RealtimePetMonitor:
         self.latest_detections_lock = threading.Lock()
         self.detection_worker_running = False
         self.detection_worker_thread = None
+        self._last_detected_frame_id = -1  # 防止同一帧重复检测
 
         # 猫检测优化 - 跟踪模式下使用合理阈值（ByteTrack会跨帧保留短暂消失的目标）
-        self.primary_cat_threshold = 0.25    # 主要检测阈值（跟踪模式下不再需要极低阈值）
-        self.secondary_cat_threshold = 0.10  # 备用阈值（仅在完全丢失时触发）
-        self.dog_detection_threshold = 0.25  # 狗的阈值
-        self.infer_imgsz = 1280              # 大输入尺寸，对小/远猫更有效
+        self.primary_cat_threshold = 0.30    # 猫类COCO精度高，提高可显著降低误检
+        self.secondary_cat_threshold = 0.20  # 兜底但不再疯狂误检
+        self.dog_detection_threshold = 0.40  # 狗在COCO常被误判为猫/熊，阈值更严（实测0.35会让猫被误判为狗 conf≈0.39 漏进来）
+        self.infer_imgsz = 960               # 960 比 1280 快 ~1.7×，精度基本不变（小目标用secondary@1920兜底）
+
+        # Secondary(TTA兜底) 节流：避免每帧都跑1920+TTA拖垮FPS
+        self.secondary_interval = 10          # 最多每N帧触发一次
+        self.secondary_miss_streak_min = 3    # 连续N帧无猫才考虑触发
+        self._secondary_last_frame = -9999    # 上次触发帧号
+        self._no_cat_streak = 0               # 连续无猫帧计数
 
         # 智能过滤参数
         self.min_area = 200          # 最小面积
@@ -145,17 +164,24 @@ class RealtimePetMonitor:
 
     @property
     def unique_cats(self):
-        """动态计算：只统计最近track_active_window帧内仍活跃的track_id"""
-        cutoff = self.frame_count - self.track_active_window
-        return {tid for tid, last_seen in self.cat_tracks.items() if last_seen >= cutoff}
+        """画面里有几只猫——与视频方框同源（含外推保持期）"""
+        dets = self.get_display_detections()
+        return {d.get('track_id', id(d)) for d in dets if d.get('class') == '猫'}
+
+    @property
+    def unique_dogs(self):
+        """画面里有几只狗——与视频方框同源（含外推保持期）"""
+        dets = self.get_display_detections()
+        return {d.get('track_id', id(d)) for d in dets if d.get('class') == '狗'}
 
     def _load_components(self):
         """加载核心组件"""
         print("🔧 加载检测组件...")
 
-        # 加载YOLO模型 - yolo11x (SOTA 2025) + TensorRT FP16
+        # 加载YOLO模型 - 使用COCO原生(支持猫15+狗16)；微调版仅猫单类，不用于多类检测
         self.yolo_model = None
-        model_stem = 'yolo11x'  # 更强：相同精度下比yolov8x快~20%，mAP更高
+        self.is_finetuned_cat_model = False  # True = 单类模型(class0=cat)，False = COCO(15=cat,16=dog)
+        model_stem = 'yolo11x'
         engine_path = Path(f'{model_stem}.engine')
         pt_path = Path(f'{model_stem}.pt')
         try:
@@ -209,9 +235,11 @@ class RealtimePetMonitor:
             print("🚀 异步检测线程已启动")
             while self.detection_worker_running:
                 frame = self.latest_raw_frame
-                if frame is None:
+                current_fid = self.frame_count
+                if frame is None or current_fid == self._last_detected_frame_id:
                     time.sleep(0.003)
                     continue
+                self._last_detected_frame_id = current_fid
                 try:
                     dets = self._multi_threshold_detection(frame)
                     now = time.time()
@@ -220,7 +248,19 @@ class RealtimePetMonitor:
                         self.total_detections += 1
                         if d['class'] == '猫':
                             self.cat_detections += 1
+                        elif d['class'] == '狗':
+                            self.dog_detections += 1
                         self._update_3d_state(d, now)
+                        # 记录 bbox 历史（带时间戳）供显示端外推
+                        tid = d.get('track_id')
+                        if tid is not None:
+                            hist = self.track_bbox_history.get(tid)
+                            if hist is None:
+                                hist = self._deque_cls(maxlen=self.bbox_history_len)
+                                self.track_bbox_history[tid] = hist
+                            hist.append((tuple(d['bbox']), now))
+                        # 给检测本身也打上时间戳（无track_id时用于判断新旧）
+                        d['ts'] = now
                     with self.latest_detections_lock:
                         self.latest_detections_async = dets
                     # 维护历史（供3D可视化使用）
@@ -230,6 +270,13 @@ class RealtimePetMonitor:
                     self.detection_history.extend(dets)
                     if len(self.detection_history) > 30:
                         self.detection_history = self.detection_history[-30:]
+                    # 定期清理长时间未更新的bbox历史，防止track_id累积
+                    if self.frame_count % 120 == 0 and self.track_bbox_history:
+                        cutoff_ts = now - 5.0
+                        stale = [tid for tid, h in self.track_bbox_history.items()
+                                 if not h or h[-1][1] < cutoff_ts]
+                        for tid in stale:
+                            self.track_bbox_history.pop(tid, None)
                 except Exception as e:
                     import traceback
                     print(f"⚠️ 异步检测异常: {e}")
@@ -238,6 +285,44 @@ class RealtimePetMonitor:
 
         self.detection_worker_thread = threading.Thread(target=worker, daemon=True)
         self.detection_worker_thread.start()
+
+    def get_display_detections(self):
+        """显示端：拷贝最新检测并用速度外推对齐到当前时刻，使框'粘'在目标上。
+
+        对每个有track_id的检测，从历史中取最近两帧算速度，线性外推到now。
+        无track_id或历史不足时，原框直接返回。超过 extrapolation_max_age 不外推。
+        """
+        with self.latest_detections_lock:
+            base = list(self.latest_detections_async)
+        if not base:
+            return base
+
+        now = time.time()
+        max_age = self.extrapolation_max_age
+        max_step = self.extrapolation_max_step
+        out = []
+        for det in base:
+            ts = det.get('ts')
+            if ts is not None and (now - ts) > max_age:
+                continue  # 太旧，直接丢弃，避免鬼影
+            d = dict(det)
+            tid = det.get('track_id')
+            if tid is not None:
+                hist = self.track_bbox_history.get(tid)
+                if hist is not None and len(hist) >= 2:
+                    (b_prev, t_prev), (b_last, t_last) = hist[-2], hist[-1]
+                    dt = t_last - t_prev
+                    if dt > 1e-3:
+                        step = min(max(now - t_last, 0.0), max_step)
+                        fx = step / dt
+                        x1 = int(b_last[0] + (b_last[0] - b_prev[0]) * fx)
+                        y1 = int(b_last[1] + (b_last[1] - b_prev[1]) * fx)
+                        x2 = int(b_last[2] + (b_last[2] - b_prev[2]) * fx)
+                        y2 = int(b_last[3] + (b_last[3] - b_prev[3]) * fx)
+                        d['bbox'] = [x1, y1, x2, y2]
+                        d['center'] = [(x1 + x2) // 2, (y1 + y2) // 2]
+            out.append(d)
+        return out
 
     def _update_3d_state(self, det, now):
         """对单个检测做EMA坐标平滑 + 轨迹累积，结果写回det供3D视图使用。"""
@@ -376,13 +461,13 @@ class RealtimePetMonitor:
 
         print("📥 加载VLM分析模型...")
         try:
-            self.vlm_model = Qwen2VLForConditionalGeneration.from_pretrained(
-                "Qwen/Qwen2-VL-7B-Instruct",
+            self.vlm_model = Qwen3VLForConditionalGeneration.from_pretrained(
+                "Qwen/Qwen3-VL-8B-Instruct",
                 torch_dtype=torch.bfloat16,
                 device_map="auto",
                 low_cpu_mem_usage=True
             )
-            self.vlm_processor = AutoProcessor.from_pretrained("Qwen/Qwen2-VL-7B-Instruct")
+            self.vlm_processor = AutoProcessor.from_pretrained("Qwen/Qwen3-VL-8B-Instruct")
             self.vlm_model_loaded = True
             print("✅ VLM模型加载成功")
         except Exception as e:
@@ -445,34 +530,43 @@ class RealtimePetMonitor:
         """SOTA检测+跟踪：yolo11x + BoT-SORT(ReID外观特征)，遮挡抗性&ID稳定性远优于ByteTrack。
         丢失时自动切高分辨率+TTA做兜底扫描。"""
         tracker_cfg = 'bytetrack.yaml'  # 最稳定，避免ReID/GMC引入的bfloat16冲突
+        cls_filter = [0] if self.is_finetuned_cat_model else [15, 16]
 
         results = self.yolo_model.track(
             frame,
             conf=self.primary_cat_threshold,
             iou=0.5,
             imgsz=self.infer_imgsz,
-            classes=[15, 16],
+            classes=cls_filter,
             tracker=tracker_cfg,
             persist=True,
             verbose=False,
         )
         detections = self._extract_detections(results, 'track')
 
-        # 兜底：连续无猫时，放大分辨率 + TTA多尺度增强扫描（速度慢，仅偶发触发）
-        if not any(d['class'] == '猫' for d in detections):
-            try:
-                secondary_results = self.yolo_model(
-                    frame,
-                    conf=self.secondary_cat_threshold,
-                    iou=0.3,
-                    imgsz=1920,        # 更大输入尺寸找小/远目标
-                    classes=[15, 16],
-                    augment=True,      # TTA：水平翻转+多尺度
-                    verbose=False,
-                )
-                detections.extend(self._extract_detections(secondary_results, 'secondary'))
-            except Exception:
-                pass
+        # 兜底：连续无猫时，放大分辨率 + TTA多尺度增强扫描（速度慢，带节流）
+        has_cat = any(d['class'] == '猫' for d in detections)
+        if has_cat:
+            self._no_cat_streak = 0
+        else:
+            self._no_cat_streak += 1
+            frames_since_last = self.frame_count - self._secondary_last_frame
+            if (self._no_cat_streak >= self.secondary_miss_streak_min
+                    and frames_since_last >= self.secondary_interval):
+                self._secondary_last_frame = self.frame_count
+                try:
+                    secondary_results = self.yolo_model(
+                        frame,
+                        conf=self.secondary_cat_threshold,
+                        iou=0.5,           # 与主分支一致，避免重叠框
+                        imgsz=1920,        # 更大输入尺寸找小/远目标
+                        classes=cls_filter,
+                        augment=True,      # TTA：水平翻转+多尺度
+                        verbose=False,
+                    )
+                    detections.extend(self._extract_detections(secondary_results, 'secondary'))
+                except Exception:
+                    pass
 
         return detections
 
@@ -493,9 +587,13 @@ class RealtimePetMonitor:
                     cls = int(box.cls[0].float().item())
                     conf = float(box.conf[0].float().item())
 
-                    # 只处理猫和狗
-                    is_cat = cls == 15
-                    is_dog = cls == 16
+                    # 只处理猫和狗（微调模型: class 0=cat, 无dog；原模型: 15=cat,16=dog）
+                    if self.is_finetuned_cat_model:
+                        is_cat = cls == 0
+                        is_dog = False
+                    else:
+                        is_cat = cls == 15
+                        is_dog = cls == 16
 
                     if not (is_cat or is_dog):
                         continue
@@ -521,10 +619,12 @@ class RealtimePetMonitor:
 
                     # 追踪ID：仅来自tracker的ID参与唯一性统计（secondary兜底帧不计）
                     track_id = None
-                    if is_cat and detection_type == 'track':
-                        if hasattr(box, 'id') and box.id is not None:
-                            track_id = int(box.id[0].float().item())
+                    if detection_type == 'track' and hasattr(box, 'id') and box.id is not None:
+                        track_id = int(box.id[0].float().item())
+                        if is_cat:
                             self.cat_tracks[track_id] = self.frame_count
+                        elif is_dog:
+                            self.dog_tracks[track_id] = self.frame_count
 
                     detection = {
                         'class': '猫' if is_cat else '狗',
@@ -538,13 +638,10 @@ class RealtimePetMonitor:
                         'detection_type': detection_type
                     }
 
-                    # 添加质量分数
-                    if is_cat:
-                        detection['quality_score'] = self._calculate_quality_score(detection)
-                        # 只保留高质量的猫检测
-                        if detection['quality_score'] > 0.3:
-                            detections.append(detection)
-                    else:
+                    # 添加质量分数：猫狗对称走质量筛，避免狗的低质量误判流入下游
+                    frame_shape = getattr(r, 'orig_shape', None)
+                    detection['quality_score'] = self._calculate_quality_score(detection, frame_shape)
+                    if detection['quality_score'] > 0.55:
                         detections.append(detection)
 
         return detections
@@ -557,12 +654,12 @@ class RealtimePetMonitor:
             return False
         return True
 
-    def _calculate_quality_score(self, detection):
+    def _calculate_quality_score(self, detection, frame_shape=None):
         """计算检测质量分数"""
         score = 0
 
-        # 置信度权重
-        conf_score = min(detection['confidence'] / 0.1, 1.0)
+        # 置信度权重：/0.5 而非 /0.1，避免 conf>=0.1 即饱和
+        conf_score = min(detection['confidence'] / 0.5, 1.0)
         score += conf_score * self.quality_weights['detection']
 
         # 面积权重
@@ -585,9 +682,14 @@ class RealtimePetMonitor:
             ratio_score = 0.3
         score += ratio_score * self.quality_weights['aspect_ratio']
 
-        # 位置权重 (避免边缘检测)
+        # 位置权重：按帧尺寸比例（原硬编码 1280x720 已移除）
         center_x, center_y = detection['center']
-        if 100 < center_x < 1180 and 50 < center_y < 670:
+        if frame_shape is not None and len(frame_shape) >= 2:
+            fh, fw = frame_shape[0], frame_shape[1]
+        else:
+            fh, fw = 720, 1280
+        mx, my = 0.08 * fw, 0.07 * fh  # 边缘安全带
+        if mx < center_x < (fw - mx) and my < center_y < (fh - my):
             position_score = 1.0
         else:
             position_score = 0.5
@@ -707,6 +809,13 @@ class RealtimePetMonitor:
             import random
             return random.uniform(0.0, 0.3)
 
+    def _vlm_analyze_async(self, frame):
+        """后台线程执行VLM分析，完成后清除标志"""
+        try:
+            self.analyze_frame_vlm(frame)
+        finally:
+            self._vlm_running = False
+
     def analyze_frame_vlm(self, frame):
         """VLM帧分析"""
         # 检查是否需要进行VLM分析
@@ -789,16 +898,274 @@ class RealtimePetMonitor:
         self.last_positions[key] = (current_pos, timestamp)
         return self.pet_velocities.get(key, {'velocity': np.zeros(3), 'speed': 0, 'direction': np.zeros(2)})
 
-    def generate_3d_visualization(self):
-        """高级实时3D空间追踪可视化"""
+    # ============== Open3D 3D 可视化（专属线程，规避 Filament 跨线程 panic） ==============
+    def _ensure_o3d_worker(self):
+        """启动专属渲染线程一次，渲染器只在该线程内创建/调用。"""
+        if hasattr(self, '_o3d_worker_started'):
+            return getattr(self, '_o3d_worker_alive', False)
+        self._o3d_worker_started = True
+        self._o3d_worker_alive = False
+        try:
+            import open3d, queue  # 仅探测可用性
+        except Exception as e:
+            print(f"⚠️ Open3D 不可用: {e}")
+            return False
+        import queue
+        self._o3d_req_q = queue.Queue(maxsize=4)
+        self._o3d_ready_event = threading.Event()
+        t = threading.Thread(target=self._o3d_worker_loop, daemon=True, name='o3d-render')
+        t.start()
+        # 等待初始化（最多5秒）
+        if self._o3d_ready_event.wait(timeout=5.0):
+            return self._o3d_worker_alive
+        print("⚠️ Open3D worker 初始化超时")
+        return False
+
+    def _o3d_worker_loop(self):
+        """专属线程：拥有 OffscreenRenderer，处理渲染请求队列。"""
+        try:
+            import open3d as o3d
+            from pxr import Usd, UsdGeom
+            import re
+
+            W, H = 720, 540
+            r = o3d.visualization.rendering.OffscreenRenderer(W, H)
+            scene = r.scene
+            scene.set_background([0.04, 0.04, 0.07, 1.0])
+            scene.scene.set_sun_light([-0.4, -0.5, -1.0], [1.0, 1.0, 0.95], 65000)
+            scene.scene.enable_sun_light(True)
+            scene.show_axes(True)
+
+            CAT_COLOR = {
+                'Wall': (0.65, 0.65, 0.70), 'Floor': (0.40, 0.36, 0.30),
+                'Door': (0.90, 0.55, 0.30), 'Window': (0.45, 0.75, 0.95),
+                'Chair': (0.95, 0.55, 0.55), 'Table': (0.60, 0.45, 0.30),
+                'Television': (0.18, 0.18, 0.20),
+            }
+            WIRE_CATS = {'Wall', 'Floor', 'Window'}
+
+            stage = Usd.Stage.Open('scan.usd')
+            xc = UsdGeom.XformCache(0.0)
+            count = 0
+            for prim in stage.Traverse():
+                if prim.GetTypeName() != 'Mesh':
+                    continue
+                mesh = UsdGeom.Mesh(prim)
+                pts = mesh.GetPointsAttr().Get()
+                fc = mesh.GetFaceVertexCountsAttr().Get()
+                fi = mesh.GetFaceVertexIndicesAttr().Get()
+                if not pts or not fc or not fi:
+                    continue
+                pts_np = np.array([[p[0], p[1], p[2]] for p in pts])
+                m = xc.GetLocalToWorldTransform(prim)
+                mat = np.array([[m[i][j] for j in range(4)] for i in range(4)])
+                world = (np.hstack([pts_np, np.ones((len(pts_np), 1))]) @ mat)[:, :3]
+
+                tris = []
+                idx = 0
+                for c in fc:
+                    poly = list(fi[idx:idx + c])
+                    for k in range(1, c - 1):
+                        tris.append([poly[0], poly[k], poly[k + 1]])
+                    idx += c
+                if not tris:
+                    continue
+                tris_np = np.array(tris, dtype=np.int32)
+                cat = re.match(r'([A-Za-z]+)', prim.GetName()).group(1)
+                color = CAT_COLOR.get(cat, (0.6, 0.6, 0.6))
+                tm = o3d.geometry.TriangleMesh(
+                    o3d.utility.Vector3dVector(world),
+                    o3d.utility.Vector3iVector(tris_np))
+                tm.compute_vertex_normals()
+                if cat in WIRE_CATS:
+                    ls = o3d.geometry.LineSet.create_from_triangle_mesh(tm)
+                    ls.paint_uniform_color(color)
+                    lm = o3d.visualization.rendering.MaterialRecord()
+                    lm.shader = 'unlitLine'
+                    lm.line_width = 1.2
+                    lm.base_color = list(color) + [1.0]
+                    scene.add_geometry(f'usd_{count}', ls, lm)
+                else:
+                    mr = o3d.visualization.rendering.MaterialRecord()
+                    mr.shader = 'defaultLit'
+                    mr.base_color = list(color) + [1.0]
+                    scene.add_geometry(f'usd_{count}', tm, mr)
+                count += 1
+
+            bb = scene.bounding_box
+            center = np.array(bb.get_center())
+            extent = np.array(bb.get_extent())
+            cam_radius = float(np.linalg.norm(extent)) * 0.9  # 球形相机距离
+            # 默认视角：azim=45°, elev=25°
+            def _set_camera(azim_deg, elev_deg):
+                az = np.deg2rad(azim_deg)
+                el = np.deg2rad(np.clip(elev_deg, -85, 85))
+                eye = center + cam_radius * np.array([
+                    np.cos(el) * np.cos(az),
+                    np.cos(el) * np.sin(az),
+                    np.sin(el),
+                ])
+                scene.camera.look_at(center, eye, [0, 0, 1])
+            _set_camera(45.0, 25.0)
+
+            print(f"✅ Open3D 离屏渲染器就绪 ({count} meshes, {W}x{H})")
+            self._o3d_worker_alive = True
+            dyn_geoms = []
+        except Exception as e:
+            print(f"❌ Open3D worker 初始化失败: {e}")
+            self._o3d_worker_alive = False
+            self._o3d_ready_event.set()
+            return
+
+        self._o3d_ready_event.set()
+
+        # 渲染请求处理循环
+        while True:
+            req = self._o3d_req_q.get()
+            if req is None:
+                break
+            cat_pos, dog_pos, azim_deg, elev_deg, response_box = req
+            try:
+                _set_camera(azim_deg, elev_deg)
+                # 清旧几何
+                for n in dyn_geoms:
+                    try: scene.remove_geometry(n)
+                    except Exception: pass
+                dyn_geoms.clear()
+
+                # 每只宠物一个球体：猫绿、狗青
+                z_floor = self.usd_bounds['z_min'] if self.usd_bounds else 0.0
+                for prefix, pos, base_color, proj_color in [
+                    ('cat', cat_pos, [0.1, 0.95, 0.1, 1.0], [0.2, 1.0, 0.2]),
+                    ('dog', dog_pos, [0.1, 0.7, 1.0, 1.0], [0.2, 0.8, 1.0]),
+                ]:
+                    if pos is None:
+                        continue
+                    sp = o3d.geometry.TriangleMesh.create_sphere(radius=0.12)
+                    sp.translate(pos)
+                    sp.compute_vertex_normals()
+                    mr = o3d.visualization.rendering.MaterialRecord()
+                    mr.shader = 'defaultLit'
+                    mr.base_color = base_color
+                    name = f'{prefix}_ball'
+                    scene.add_geometry(name, sp, mr)
+                    dyn_geoms.append(name)
+                    # 投影线到地面
+                    if pos[2] > 0.05:
+                        line = o3d.geometry.LineSet(
+                            o3d.utility.Vector3dVector([pos.tolist(), [pos[0], pos[1], z_floor]]),
+                            o3d.utility.Vector2iVector([[0, 1]]))
+                        line.colors = o3d.utility.Vector3dVector([proj_color])
+                        lm = o3d.visualization.rendering.MaterialRecord()
+                        lm.shader = 'unlitLine'
+                        lm.line_width = 2.0
+                        proj_name = f'{prefix}_proj'
+                        scene.add_geometry(proj_name, line, lm)
+                        dyn_geoms.append(proj_name)
+
+                img = r.render_to_image()
+                arr = np.asarray(img)
+                bgr = cv2.cvtColor(arr, cv2.COLOR_RGBA2BGR if arr.ndim == 3 and arr.shape[2] == 4
+                                   else cv2.COLOR_RGB2BGR)
+
+                # 文字叠加
+                h_, w_ = bgr.shape[:2]
+                font = cv2.FONT_HERSHEY_SIMPLEX
+
+                # 视角（右上）
+                view_txt = f"View  az={azim_deg:.0f}  el={elev_deg:.0f}"
+                cv2.rectangle(bgr, (w_ - 200, 5), (w_ - 5, 30), (0, 0, 0), -1)
+                cv2.putText(bgr, view_txt, (w_ - 195, 23),
+                            font, 0.50, (200, 255, 200), 1, cv2.LINE_AA)
+
+                # 房间尺寸（左上）
+                if self.usd_bounds:
+                    b = self.usd_bounds
+                    rm_txt = f"Room {b['x_max']-b['x_min']:.2f} x {b['y_max']-b['y_min']:.2f} m"
+                    cv2.rectangle(bgr, (5, 5), (215, 30), (0, 0, 0), -1)
+                    cv2.putText(bgr, rm_txt, (10, 23),
+                                font, 0.50, (180, 220, 255), 1, cv2.LINE_AA)
+
+                # 宠物坐标（左下）— 猫绿、狗青，上下排列
+                y_bottom = h_ - 5
+                for label, pos, title_color, coord_color in [
+                    ('Dog', dog_pos, (180, 220, 255), (100, 220, 255)),
+                    ('Cat', cat_pos, (180, 255, 180), (100, 255, 100)),
+                ]:
+                    if pos is not None:
+                        cv2.rectangle(bgr, (5, y_bottom - 40), (270, y_bottom), (0, 0, 0), -1)
+                        cv2.putText(bgr, f"{label} position (m)", (10, y_bottom - 23),
+                                    font, 0.48, title_color, 1, cv2.LINE_AA)
+                        coord_txt = f"X={pos[0]:+.2f}  Y={pos[1]:+.2f}  Z={pos[2]:+.2f}"
+                        cv2.putText(bgr, coord_txt, (10, y_bottom - 3),
+                                    font, 0.55, coord_color, 2, cv2.LINE_AA)
+                        y_bottom -= 45
+                if cat_pos is None and dog_pos is None:
+                    cv2.rectangle(bgr, (5, h_ - 30), (220, h_ - 5), (0, 0, 0), -1)
+                    cv2.putText(bgr, "No pets detected", (10, h_ - 12),
+                                font, 0.50, (150, 150, 150), 1, cv2.LINE_AA)
+
+                ok, buf = cv2.imencode('.png', bgr)
+                response_box.append(base64.b64encode(buf.tobytes()).decode() if ok else None)
+            except Exception as e:
+                print(f"⚠️ Open3D 渲染异常: {e}")
+                response_box.append(None)
+            finally:
+                response_box.append(True)  # done sentinel
+
+    def _render_3d_open3d(self, azim=45.0, elev=25.0):
+        """主线程入口：将渲染请求投给专属线程，等待结果。"""
+        if not self._ensure_o3d_worker():
+            return None
+        # 取每种宠物的最新位置（只要一个点，不要轨迹）
+        cat_pos = None
+        dog_pos = None
+        for d in reversed(self.detection_history[-30:]):
+            c = d.get('physical_coords')
+            if not c:
+                continue
+            pt = np.array([c.get('x', 0.0), c.get('y', 0.0), c.get('z', 0.0)])
+            if d.get('class') == '猫' and cat_pos is None:
+                cat_pos = pt
+            elif d.get('class') == '狗' and dog_pos is None:
+                dog_pos = pt
+            if cat_pos is not None and dog_pos is not None:
+                break
+
+        response_box = []
+        try:
+            self._o3d_req_q.put_nowait((cat_pos, dog_pos, float(azim), float(elev), response_box))
+        except Exception:
+            return None  # 队列满，跳过这次
+        # 等结果（worker 完成后会附加 True 哨兵）
+        for _ in range(40):  # 最多2秒
+            if len(response_box) >= 2:
+                return response_box[0]
+            time.sleep(0.05)
+        return None
+
+    def generate_3d_visualization(self, azim=45.0, elev=25.0):
+        """3D空间追踪可视化：优先 Open3D（高质量），失败回退到 matplotlib。"""
         current_time = time.time()
 
-        # 更激进的缓存策略
+        # 缓存按视角分桶（避免拖动时缓存命中错图）
+        cache_key = (round(azim, 1), round(elev, 1))
         if (current_time - self.last_3d_viz_time < self.min_3d_viz_interval and
+            getattr(self, '_viz_3d_cache_key', None) == cache_key and
             self.viz_3d_cache is not None):
             return self.viz_3d_cache
 
         self.last_3d_viz_time = current_time
+
+        # 尝试 Open3D 高质量渲染
+        try:
+            o3d_result = self._render_3d_open3d(azim=azim, elev=elev)
+            if o3d_result is not None:
+                self.viz_3d_cache = o3d_result
+                self._viz_3d_cache_key = cache_key
+                return o3d_result
+        except Exception as e:
+            print(f"⚠️ Open3D 3D viz 失败，回退 matplotlib: {e}")
 
         try:
             # 高性能设置
@@ -948,45 +1315,96 @@ class RealtimePetMonitor:
                                      z_component,
                                      color='lime', arrow_length_ratio=0.3, alpha=0.9)
 
-                # 绘制狗的轨迹（简化版）
+                # 绘制狗的高级3D轨迹（与猫对称）
                 if len(dog_trail) > 1:
                     positions = np.array([point['pos'] for point in dog_trail])
-                    ax.plot(positions[:, 0], positions[:, 1], positions[:, 2],
-                           'cyan', linewidth=2, alpha=0.7)
 
-                    # 最新位置
-                    latest_pos = positions[-1]
-                    ax.scatter(latest_pos[0], latest_pos[1], latest_pos[2],
-                             c='blue', s=80, alpha=0.9, edgecolors='cyan', linewidths=2)
+                    # 3D渐变轨迹线
+                    for i in range(len(positions) - 1):
+                        alpha = 0.3 + 0.7 * (i / len(positions))
+                        linewidth = 1 + 3 * (i / len(positions))
+                        ax.plot(positions[i:i+2, 0], positions[i:i+2, 1], positions[i:i+2, 2],
+                               'cyan', alpha=alpha, linewidth=linewidth)
 
-                # 标记每只活跃猫的当前位置 + 精确XYZ坐标 + 轨迹线
-                active_cat_ids = self.unique_cats
-                for tid in active_cat_ids:
-                    traj = self.track_trajectory.get(tid)
-                    if not traj:
-                        continue
-                    # 轨迹线（按时间渐变颜色）
-                    if len(traj) >= 2:
-                        import matplotlib.cm as cm
-                        xs = [p[0] for p in traj]
-                        ys = [p[1] for p in traj]
-                        zs = [p[2] for p in traj]
-                        for i in range(1, len(traj)):
-                            c = cm.plasma(i / len(traj))
-                            ax.plot(xs[i-1:i+1], ys[i-1:i+1], zs[i-1:i+1],
-                                    color=c, linewidth=2, alpha=0.85)
+                    # 地面投影
+                    for i, point in enumerate(dog_trail[-5:]):
+                        pos = point['pos']
+                        if pos[2] > 0.1:
+                            ax.plot([pos[0], pos[0]], [pos[1], pos[1]], [pos[2], 0],
+                                   'cyan', alpha=0.3, linewidth=1, linestyle='--')
+                            ax.scatter(pos[0], pos[1], 0, c='deepskyblue', s=20, alpha=0.4, marker='o')
 
-                    # 当前位置：大星标
-                    cx, cy, cz = traj[-1]
-                    ax.scatter(cx, cy, cz, c='white', s=180, alpha=0.95,
-                               marker='*', edgecolors='lime', linewidths=2.5)
+                    # 3D热力图式轨迹点
+                    for i, point in enumerate(dog_trail[-10:]):
+                        pos = point['pos']
+                        weight = point['time_weight']
+                        base_size = 30 + 50 * weight
+                        alpha = 0.4 + 0.6 * weight
+                        height = pos[2]
+                        speed = point['velocity']['speed']
 
-                    # 精确XYZ文本（多行）
-                    coord_text = f"CAT#{tid}\nX={cx:.2f}m\nY={cy:.2f}m\nZ={cz:.2f}m"
-                    ax.text(cx, cy, cz + 0.25, coord_text,
-                            fontsize=9, color='lime', ha='center',
-                            bbox=dict(boxstyle='round,pad=0.3', facecolor='black',
-                                      edgecolor='lime', alpha=0.7))
+                        if height > 0.8:
+                            color_base = 'red'
+                            size_multiplier = 1.3
+                        elif height > 0.3:
+                            color_base = 'darkorange'
+                            size_multiplier = 1.1
+                        else:
+                            color_base = 'gold'
+                            size_multiplier = 1.0
+
+                        speed_alpha = 1.0 if speed > 0.5 else (0.8 if speed > 0.2 else 0.6)
+                        final_alpha = alpha * speed_alpha
+                        final_size = base_size * size_multiplier
+
+                        ax.scatter(pos[0], pos[1], pos[2], c=color_base, s=final_size,
+                                 alpha=final_alpha, edgecolors='cyan', linewidths=1)
+
+                        if i == len(dog_trail[-10:]) - 1 and height > 0.1:
+                            ax.text(pos[0], pos[1], pos[2] + 0.15, f'H:{height:.2f}m',
+                                   fontsize=7, color='cyan', ha='center', alpha=0.8)
+
+                        if speed > 0.1 and i == len(dog_trail[-10:]) - 1:
+                            direction = point['velocity']['direction']
+                            arrow_length = min(speed * 0.4, 0.25)
+                            z_component = (height - 0.2) * 0.1
+                            ax.quiver(pos[0], pos[1], pos[2],
+                                     direction[0] * arrow_length,
+                                     direction[1] * arrow_length,
+                                     z_component,
+                                     color='cyan', arrow_length_ratio=0.3, alpha=0.9)
+
+                # 标记每只活跃宠物的当前位置 + 精确XYZ坐标 + 轨迹线
+                import matplotlib.cm as cm
+                for pet_type, active_ids, trail_color, edge_color, label_prefix in [
+                    ('猫', self.unique_cats, 'lime', 'lime', 'CAT'),
+                    ('狗', self.unique_dogs, 'cyan', 'cyan', 'DOG'),
+                ]:
+                    for tid in active_ids:
+                        traj = self.track_trajectory.get(tid)
+                        if not traj:
+                            continue
+                        # 轨迹线（按时间渐变颜色）
+                        if len(traj) >= 2:
+                            xs = [p[0] for p in traj]
+                            ys = [p[1] for p in traj]
+                            zs = [p[2] for p in traj]
+                            for i in range(1, len(traj)):
+                                c = cm.plasma(i / len(traj))
+                                ax.plot(xs[i-1:i+1], ys[i-1:i+1], zs[i-1:i+1],
+                                        color=c, linewidth=2, alpha=0.85)
+
+                        # 当前位置：大星标
+                        cx, cy, cz = traj[-1]
+                        ax.scatter(cx, cy, cz, c='white', s=180, alpha=0.95,
+                                   marker='*', edgecolors=edge_color, linewidths=2.5)
+
+                        # 精确XYZ文本（多行）
+                        coord_text = f"{label_prefix}#{tid}\nX={cx:.2f}m\nY={cy:.2f}m\nZ={cz:.2f}m"
+                        ax.text(cx, cy, cz + 0.25, coord_text,
+                                fontsize=9, color=trail_color, ha='center',
+                                bbox=dict(boxstyle='round,pad=0.3', facecolor='black',
+                                          edgecolor=edge_color, alpha=0.7))
 
             # 美化设置
             ax.set_xlabel('X(m)', fontsize=9, color='cyan')
@@ -1041,9 +1459,10 @@ class RealtimePetMonitor:
             self.frame_count += 1
             self.current_frame = frame
 
-            # VLM分析
-            if (self.frame_count % self.vlm_analysis_interval == 0):
-                self.analyze_frame_vlm(frame)
+            # VLM分析 — 异步，不阻塞视频线程
+            if (self.frame_count % self.vlm_analysis_interval == 0) and not self._vlm_running:
+                self._vlm_running = True
+                threading.Thread(target=self._vlm_analyze_async, args=(frame.copy(),), daemon=True).start()
 
             return frame
         else:
@@ -1167,7 +1586,7 @@ def index():
                 padding: 16px;
                 height: calc(100vh - 60px);
                 display: grid;
-                grid-template-columns: minmax(600px, 2.5fr) 1fr 1fr 1fr;
+                grid-template-columns: minmax(580px, 2.2fr) 1fr 1fr 1.7fr;
                 gap: 16px;
                 max-width: none;
                 overflow-x: auto;
@@ -1316,6 +1735,12 @@ def index():
                 text-shadow: 0 0 8px rgba(48, 209, 88, 0.3);
             }
 
+            .dog-count {
+                color: #64D2FF !important;
+                font-size: 32px !important;
+                text-shadow: 0 0 8px rgba(100, 210, 255, 0.3);
+            }
+
             /* VLM分析内容 */
             .vlm-content {
                 padding: 20px;
@@ -1418,7 +1843,7 @@ def index():
             /* 响应式设计 */
             @media (max-width: 1600px) {
                 .main-container {
-                    grid-template-columns: 2fr 0.9fr 0.9fr 0.9fr;
+                    grid-template-columns: 1.7fr 0.85fr 0.85fr 1.5fr;
                 }
 
                 .panel-header h3 {
@@ -1429,7 +1854,7 @@ def index():
                     font-size: 20px;
                 }
 
-                .cat-count {
+                .cat-count, .dog-count {
                     font-size: 28px !important;
                 }
             }
@@ -1482,17 +1907,22 @@ def index():
                     .then(response => response.json())
                     .then(data => {
                         document.getElementById('cat-count').textContent = data.unique_cats || 0;
-                        document.getElementById('total-count').textContent = data.total_detections || 0;
+                        document.getElementById('dog-count').textContent = data.unique_dogs || 0;
                         document.getElementById('frame-count').textContent = data.total_frames || 0;
 
                         if (data.average_confidence > 0) {
                             document.getElementById('avg-confidence').textContent = data.average_confidence.toFixed(3);
                         }
 
-                        // 更新导航栏状态
+                        // 更新导航栏状态（实时只数）
                         const navStats = document.getElementById('nav-stats');
-                        if (navStats && data.unique_cats > 0) {
-                            navStats.textContent = `检测到 ${data.unique_cats} 只猫咪 (${data.cat_detections}次检测)`;
+                        if (navStats) {
+                            const cats = data.unique_cats || 0;
+                            const dogs = data.unique_dogs || 0;
+                            const parts = [];
+                            if (cats > 0) parts.push(`🐱 ${cats}只猫`);
+                            if (dogs > 0) parts.push(`🐶 ${dogs}只狗`);
+                            navStats.textContent = parts.length > 0 ? parts.join('  ') : '未检测到宠物';
                         }
                     })
                     .catch(error => console.log('Stats error:', error));
@@ -1514,27 +1944,65 @@ def index():
             // 优化更新频率
             setInterval(updateData, 1000);  // 统计数据每秒更新
 
-            // 高频3D可视化更新
+            // 3D 视角状态（鼠标可拖动旋转）
+            let viz3dAzim = 45.0, viz3dElev = 25.0;
+            let viz3dDragging = false, viz3dDragStart = null;
+            let viz3dPendingRefresh = false;
+
             function update3D() {
                 const viz3d = document.getElementById('viz-3d');
                 if (viz3d) {
-                    viz3d.src = '/api/3d_visualization?' + new Date().getTime();
+                    viz3d.src = '/api/3d_visualization?azim=' + viz3dAzim.toFixed(1)
+                                + '&elev=' + viz3dElev.toFixed(1)
+                                + '&_=' + new Date().getTime();
                 }
             }
-            setInterval(update3D, 400);  // 3D可视化每0.4秒更新，超实时！
+            setInterval(update3D, 400);  // 3D可视化每0.4秒自动更新（轨迹实时）
 
-            // 添加3D图片加载完成的平滑动画
+            // 拖动旋转节流刷新（最多 12fps，避免请求堆积）
+            function scheduleDragRefresh() {
+                if (viz3dPendingRefresh) return;
+                viz3dPendingRefresh = true;
+                setTimeout(() => { viz3dPendingRefresh = false; update3D(); }, 80);
+            }
+
             document.addEventListener('DOMContentLoaded', function() {
                 const viz3d = document.getElementById('viz-3d');
-                if (viz3d) {
-                    viz3d.style.transition = 'opacity 0.2s ease-in-out';
-                    viz3d.onload = function() {
-                        this.style.opacity = '1';
-                    };
-                    viz3d.onerror = function() {
-                        console.log('3D visualization load error');
-                    };
-                }
+                if (!viz3d) return;
+                viz3d.style.transition = 'opacity 0.2s ease-in-out';
+                viz3d.style.cursor = 'grab';
+                viz3d.style.userSelect = 'none';
+                viz3d.draggable = false;
+                viz3d.title = '🖱️ 鼠标拖动旋转 / 双击复位';
+                viz3d.onload = function() { this.style.opacity = '1'; };
+                viz3d.onerror = function() { console.log('3D viz load error'); };
+
+                viz3d.addEventListener('mousedown', e => {
+                    viz3dDragging = true;
+                    viz3dDragStart = { x: e.clientX, y: e.clientY,
+                                       azim: viz3dAzim, elev: viz3dElev };
+                    viz3d.style.cursor = 'grabbing';
+                    e.preventDefault();
+                });
+                window.addEventListener('mousemove', e => {
+                    if (!viz3dDragging) return;
+                    const dx = e.clientX - viz3dDragStart.x;
+                    const dy = e.clientY - viz3dDragStart.y;
+                    // 灵敏度：屏幕宽度的拖动 = 360°
+                    viz3dAzim = (viz3dDragStart.azim - dx * 0.4) % 360;
+                    viz3dElev = Math.max(-85, Math.min(85, viz3dDragStart.elev + dy * 0.3));
+                    scheduleDragRefresh();
+                });
+                window.addEventListener('mouseup', () => {
+                    if (viz3dDragging) {
+                        viz3dDragging = false;
+                        viz3d.style.cursor = 'grab';
+                        update3D();  // 终态再要一次，确保最新角度
+                    }
+                });
+                viz3d.addEventListener('dblclick', () => {
+                    viz3dAzim = 45.0; viz3dElev = 25.0; update3D();
+                });
             });
 
             // 页面加载时立即更新
@@ -1590,12 +2058,12 @@ def index():
                 <div class="panel-content">
                     <div class="stats-content">
                         <div class="stat-row">
-                            <div class="stat-label">🐱 猫咪检测</div>
+                            <div class="stat-label">🐱 画面中猫</div>
                             <div id="cat-count" class="stat-value cat-count">0</div>
                         </div>
                         <div class="stat-row">
-                            <div class="stat-label">📈 总检测数</div>
-                            <div id="total-count" class="stat-value">0</div>
+                            <div class="stat-label">🐶 画面中狗</div>
+                            <div id="dog-count" class="stat-value dog-count">0</div>
                         </div>
                         <div class="stat-row">
                             <div class="stat-label">🎬 处理帧数</div>
@@ -1663,9 +2131,8 @@ def video_feed():
             # 将最新帧交给后台检测线程，视频流本身永不等待AI推理
             monitor_system.latest_raw_frame = frame
 
-            # 直接读取后台最新检测结果（可能滞后1-2帧，但视频保持30fps流畅）
-            with monitor_system.latest_detections_lock:
-                detections = list(monitor_system.latest_detections_async)
+            # 取最新检测 + 速度外推到当前显示时刻（框随目标移动贴合）
+            detections = monitor_system.get_display_detections()
 
             # 简洁视频叠加：仅框 + ID标签（3D坐标在3D视图面板里显示）
             for det in detections:
@@ -1680,20 +2147,30 @@ def video_feed():
                                 cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 0, 0), 2)
                 else:
                     color = (255, 100, 0)
-                    cv2.rectangle(frame, (x1, y1), (x2, y2), color, 2)
+                    cv2.rectangle(frame, (x1, y1), (x2, y2), color, 3)
+                    tid = det.get('track_id')
+                    label = f"DOG#{tid}" if tid is not None else "DOG"
+                    cv2.rectangle(frame, (x1, y1 - 25), (x1 + 90, y1), color, -1)
+                    cv2.putText(frame, label, (x1 + 5, y1 - 8),
+                                cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 255, 255), 2)
 
-            # 简化统计显示
-            if len(monitor_system.unique_cats) > 0:
-                stats_text = f"LIVE | Cats: {len(monitor_system.unique_cats)}"
+            # 简化统计显示（猫+狗）
+            n_cats = len(monitor_system.unique_cats)
+            n_dogs = len(monitor_system.unique_dogs)
+            if n_cats > 0 or n_dogs > 0:
+                parts = ["LIVE"]
+                if n_cats > 0:
+                    parts.append(f"Cats:{n_cats}")
+                if n_dogs > 0:
+                    parts.append(f"Dogs:{n_dogs}")
+                stats_text = " | ".join(parts)
                 cv2.putText(frame, stats_text, (10, 30),
                            cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 0), 2)
 
-            # 优化编码 - 提升质量但保持速度
-            encode_param = [
-                int(cv2.IMWRITE_JPEG_QUALITY), 85,
-                int(cv2.IMWRITE_JPEG_OPTIMIZE), 1
-            ]
-            _, buffer = cv2.imencode('.jpg', frame, encode_param)
+            # 流分辨率缩小：960x540 降低编码+传输开销，检测仍用原图
+            stream_frame = cv2.resize(frame, (960, 540), interpolation=cv2.INTER_LINEAR)
+            encode_param = [int(cv2.IMWRITE_JPEG_QUALITY), 80]
+            _, buffer = cv2.imencode('.jpg', stream_frame, encode_param)
             frame_bytes = buffer.tobytes()
 
             yield (b'--frame\r\n'
@@ -1714,8 +2191,10 @@ def api_stats():
         return jsonify({'error': 'System not initialized'})
 
     return jsonify({
-        'cat_detections': monitor_system.cat_detections,      # 检测次数
-        'unique_cats': len(monitor_system.unique_cats),       # 实际猫数量
+        'cat_detections': monitor_system.cat_detections,
+        'dog_detections': monitor_system.dog_detections,
+        'unique_cats': len(monitor_system.unique_cats),
+        'unique_dogs': len(monitor_system.unique_dogs),
         'total_detections': monitor_system.total_detections,
         'total_frames': monitor_system.frame_count,
         'running': monitor_system.running
@@ -1734,10 +2213,12 @@ def api_detections():
         avg_confidence = sum(confidences) / len(confidences)
 
     return jsonify({
-        'detections': monitor_system.recent_detections[-5:],  # 最近5个检测
+        'detections': monitor_system.recent_detections[-5:],
         'total_detections': monitor_system.total_detections,
-        'cat_detections': monitor_system.cat_detections,      # 检测次数
-        'unique_cats': len(monitor_system.unique_cats),       # 实际猫数量
+        'cat_detections': monitor_system.cat_detections,
+        'dog_detections': monitor_system.dog_detections,
+        'unique_cats': len(monitor_system.unique_cats),
+        'unique_dogs': len(monitor_system.unique_dogs),
         'total_frames': monitor_system.frame_count,
         'average_confidence': avg_confidence
     })
@@ -1754,11 +2235,16 @@ def api_vlm_analysis():
 
 @app.route('/api/3d_visualization')
 def api_3d_visualization():
-    """获取3D可视化API"""
+    """获取3D可视化API。可选 ?azim=45&elev=25 控制相机角度。"""
     if monitor_system is None:
         return Response("System not initialized", mimetype="image/png")
 
-    viz_data = monitor_system.generate_3d_visualization()
+    try:
+        azim = float(request.args.get('azim', 45.0))
+        elev = float(request.args.get('elev', 25.0))
+    except (TypeError, ValueError):
+        azim, elev = 45.0, 25.0
+    viz_data = monitor_system.generate_3d_visualization(azim=azim, elev=elev)
     if viz_data:
         img_data = base64.b64decode(viz_data)
         return Response(img_data, mimetype="image/png")
